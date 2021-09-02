@@ -59,7 +59,6 @@ class Clock:
         self.event_type = event_type
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         self.thread = None
-        self.shutdown = False
 
     def start(self):
         if not self.command_q.empty():
@@ -69,11 +68,10 @@ class Clock:
         logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
         if self.thread is None:
             self.thread = threading.Thread(target=self.generate_ticks)
-        self.shutdown = False
         self.thread.start()
 
     def generate_ticks(self):
-        while not self.shutdown:
+        while True:
             if not self.command_q.empty():
                 break
             interval = self.interval_func() if self.interval_func else self.interval
@@ -86,7 +84,6 @@ class Clock:
         logger.debug(f"[Clock - {str(self.event_type)}] is shutting down")
 
     def stop(self):
-        self.shutdown = True
         if self.thread is None:
             return
         try:
@@ -94,5 +91,4 @@ class Clock:
         except queue.Full:
             pass
         self.thread.join()
-        del self.thread
         self.thread = None

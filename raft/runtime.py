@@ -47,14 +47,17 @@ class EventController:
         # thread communication queues
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         # messages inbound should be placed here
-        self.inbound_msg_queue: queue.Queue[bytes] = queue.Queue()
+        self.inbound_msg_queue: queue.Queue[bytes] = queue.Queue(maxsize=20)
         # inbound messages get translated to events here: InboundMsg -> Event
-        self.events: queue.Queue[Event] = queue.Queue(maxsize=20)
+        self.events: queue.Queue[Event] = queue.Queue(maxsize=100)
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
 
     def add_response_to_queue(self, msg):
-        self.outbound_msg_queue.put_nowait((msg.dest, msg.to_bytes()))  # type: ignore
+        try:
+            self.outbound_msg_queue.put_nowait((msg.dest, msg.to_bytes()))  # type: ignore
+        except queue.Full:
+            self.outbound_msg_queue.put((msg.dest, msg.to_bytes()))
 
     def client_msg_into_event(self, msg: bytes):
         """Inbound Message -> Events Queue"""
@@ -141,7 +144,7 @@ class EventController:
         self.events.put(self.termination_sentinel)
 
     def run_heartbeat(self):
-        self.stop_heartbeat()
+        # self.stop_heartbeat()
         # Start Heartbeat timer (only leader should use this...)
         if self.heartbeat is None:
             self.heartbeat = Clock(
@@ -184,7 +187,6 @@ class RaftNode:
         )
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         self.thread = None
-        self.shutdown = False
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
@@ -199,29 +201,15 @@ class RaftNode:
             logger.info(f"\t`Log`: \t {repr(self.instance.log)}")
 
     def handle_reset_election_timeout(self, _: Event):
-        # A leader should not nead an election timeout
         if self.debug:
             logger.info("*--- RaftNode resetting election timer ---*")
-        # self.event_controller.run_election_timeout_timer()
-
-    def handle_stop_election_timeout(self, _: Event):
-        # A leader should not nead an election timeout
-        if self.debug:
-            logger.info("*--- RaftNode stopping election timer ---*")
-        self.event_controller.stop_election_timer()
+        self.event_controller.run_election_timeout_timer()
 
     def handle_start_heartbeat(self, _: Event):
-        # A leader needs a heartbeat, but a candidate and a follower do not.
         if self.debug:
             logger.info("*--- RaftNode starting heartbeat ---*")
             logger.info(f"*--- RaftNode is currently {self.instance.__class__} ---*")
         self.event_controller.run_heartbeat()
-
-    def handle_stop_heartbeat(self, _: Event):
-        # A leader needs a heartbeat, but a candidate and a follower do not.
-        if self.debug:
-            logger.info("*--- RaftNode stopping heartbeat ---*")
-        self.event_controller.stop_heartbeat()
 
     def handle_event(self, event):
         if event.type == EventType.DEBUG_REQUEST:
@@ -230,13 +218,13 @@ class RaftNode:
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
             logger.info(f"*--- RaftNode Converting to {LOG_FOLLOWER} ---*")
-            self.handle_stop_heartbeat(event)
+            # self.handle_stop_heartbeat(event)
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
             # should only be on leaders
             logger.info(f"*--- RaftNode Converting to {LOG_LEADER} ---*")
-            self.handle_start_heartbeat(event)
-            self.handle_stop_election_timeout(event)
+            # self.handle_start_heartbeat(event)
+            # self.handle_stop_election_timeout(event)
 
         msg_type = "none"
         if event.msg:
@@ -257,17 +245,26 @@ class RaftNode:
             for response in responses:
                 self.event_controller.add_response_to_queue(response)
             for further_event in more_events:
-                self.event_controller.events.put(further_event)
+                if further_event.type == EventType.ResetElectionTimeout:
+                    self.handle_reset_election_timeout(further_event)
+                else:
+                    self.event_controller.events.put(further_event)
 
     def run_event_handler(self):
         logger.warn("*--- RaftNode Start: primary event handler ---*")
         while True:
             if not self.command_q.empty():
                 break
-            event = self.event_controller.events.get()
-            self.event_controller.events.task_done()
+            try:
+                event = self.event_controller.events.get_nowait()
+                self.event_controller.events.task_done()
+            except queue.Empty:
+                continue
             if event is self.termination_sentinel:
                 break
+            if not self.command_q.empty():
+                break
+
             self.handle_event(event)
             logger.info(
                 f"*--- RaftNode Handled event with qsize now \x1b[33m{self.event_controller.events.qsize()}\x1b[0m ---*"
@@ -275,7 +272,6 @@ class RaftNode:
         logger.warn("*--- RaftNode Stop: Shutting down primary event handler ---*")
 
     def run(self, foreground=True):
-        self.shutdown = False
         if self.debug:
             fg_or_bg = "foreground" if foreground else "background"
             logger.warn(f"*--- RaftNode is starting in DEBUG mode ---*")
@@ -283,6 +279,7 @@ class RaftNode:
 
         # Trigger event that makes it so that the correct timers start/stop
         self.event_controller.run()
+        self.event_controller.run_heartbeat()
         self.event_controller.events.put(EVENT_CONVERSION_TO_FOLLOWER)
 
         if foreground:
@@ -294,7 +291,6 @@ class RaftNode:
             self.thread.start()
 
     def stop(self):
-        self.shutdown = True
         self.event_controller.stop()
         try:
             self.command_q.put(True)

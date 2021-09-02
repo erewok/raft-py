@@ -36,7 +36,7 @@ LOGGING_CONFIG = {
         },
         "raft.models.server": {
             "handlers": ["default"],
-            "level": "WARN",
+            "level": "INFO",
             "propagate": False,
         },
         "__main__": {  # if __name__ == '__main__'
