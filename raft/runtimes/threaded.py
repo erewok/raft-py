@@ -94,7 +94,7 @@ class ThreadedEventController:
                 break
             item = self.inbound_msg_queue.get()
             self.inbound_msg_queue.task_done()
-            if item is self.termination_sentinel:
+            if item is self.termination_sentinel or self.command_event.is_set():
                 break
             event = self.client_msg_into_event(item)
             event_type = event.type if event is not None else "none"
@@ -114,7 +114,7 @@ class ThreadedEventController:
 
             item = self.outbound_msg_queue.get()
             self.outbound_msg_queue.task_done()
-            if item is self.termination_sentinel:
+            if item is self.termination_sentinel or self.command_event.is_set():
                 break
             logger.debug(f"Outbound_Msg={item}")
             (addr, msg_bytes) = item

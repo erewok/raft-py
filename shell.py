@@ -9,14 +9,14 @@ from raft.models import log
 from raft.models import rpc
 from raft.models import server
 from raft.models.helpers import Config
-from raft.runtime import RaftNode, EventController
+from raft.runtimes.threaded import ThreadedRuntime, ThreadedEventController
 
 conf = configparser.ConfigParser()
 conf.read("./raft.ini")
 config = Config(conf)
 
-ec = EventController(1, config)
-runner = RaftNode(1, config, storage.InMemoryStorage)
+ec = ThreadedEventController(1, config)
+runner = ThreadedRuntime(1, config, storage.InMemoryStorage)
 HEARTBEAT_EVENT = Event(EventType.HeartbeatTime, None)
 append_req = json.dumps({
     "term": 11,
