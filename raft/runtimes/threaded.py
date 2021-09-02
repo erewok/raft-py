@@ -45,7 +45,7 @@ class ThreadedEventController:
         )
 
         # thread communication queues
-        self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
+        self.command_event: threading.Event = threading.Event()
         # messages inbound should be placed here
         self.inbound_msg_queue: queue.Queue[bytes] = queue.Queue(maxsize=20)
         # inbound messages get translated to events here: InboundMsg -> Event
@@ -90,7 +90,7 @@ class ThreadedEventController:
         """Received Messages -> Events Queue"""
         logger.info(f"*--- EventController Start: process inbound messages *---")
         while True:
-            if not self.command_q.empty():
+            if self.command_event.is_set():
                 break
             item = self.inbound_msg_queue.get()
             self.inbound_msg_queue.task_done()
@@ -109,7 +109,7 @@ class ThreadedEventController:
     def process_outbound_msgs(self):
         logger.info(f"*--- EventController Start: process outbound messages ---*")
         while True:
-            if not self.command_q.empty():
+            if self.command_event.is_set():
                 break
 
             item = self.outbound_msg_queue.get()
@@ -127,7 +127,7 @@ class ThreadedEventController:
         threading.Thread(
             target=transport.listen_server,
             args=(self.address, self.inbound_msg_queue),
-            kwargs={"listen_server_command_q": self.command_q},
+            kwargs={"listen_server_event": self.command_event},
         ).start()
         # Launch inbound message processor
         threading.Thread(target=self.process_inbound_msgs).start()
@@ -138,7 +138,7 @@ class ThreadedEventController:
         self.stop_heartbeat()
         self.stop_election_timer()
         transport.client_send_msg(self.address, transport.SHUTDOWN_CMD, 5)
-        self.command_q.put(True)
+        self.command_event.set()
         self.inbound_msg_queue.put(self.termination_sentinel)
         self.outbound_msg_queue.put(self.termination_sentinel)
         self.events.put(self.termination_sentinel)

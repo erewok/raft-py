@@ -4,7 +4,6 @@ import logging
 import queue
 import random
 import threading
-import time
 from typing import Callable
 
 from . import Event, EventType
@@ -57,38 +56,24 @@ class Clock:
         self.interval_func = interval_func
         self.event_queue = event_queue
         self.event_type = event_type
-        self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
+        self.command_event: threading.Event = threading.Event()
         self.thread = None
 
     def start(self):
-        if not self.command_q.empty():
-            # Clear out the queue so we may be restarted
-            self.command_q.get_nowait()
-
         logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
         if self.thread is None:
-            self.thread = threading.Thread(target=self.generate_ticks)
+            self.thread = threading.Thread(target=self.generate_ticks, args=(self.event_queue,))
         self.thread.start()
 
-    def generate_ticks(self):
-        while True:
-            if not self.command_q.empty():
-                break
-            interval = self.interval_func() if self.interval_func else self.interval
-            time.sleep(interval)
-            if not self.command_q.empty():
-                break
+    def generate_ticks(self, event_q):
+        interval = self.interval_func() if self.interval_func else self.interval
+        while not self.command_event.wait(interval):
             logger.info(f"[Clock] event: {str(self.event_type)}")
-            self.event_queue.put(Event(self.event_type, None))
+            event_q.put(Event(self.event_type, None))
 
         logger.debug(f"[Clock - {str(self.event_type)}] is shutting down")
 
     def stop(self):
-        if self.thread is None:
-            return
-        try:
-            self.command_q.put_nowait(True)
-        except queue.Full:
-            pass
-        # self.thread.join()
+        self.command_event.set()
         self.thread = None
+        self.command_event.clear()

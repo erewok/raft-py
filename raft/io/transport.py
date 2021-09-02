@@ -3,6 +3,7 @@ import logging
 
 # import queue
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
+from threading import Event
 import traceback
 from typing import Dict, List, Optional, Tuple
 
@@ -82,14 +83,14 @@ def handle_socket_client(client, addr, msg_queue):
     return msg
 
 
-def listen_server(address, msg_queue, listen_server_command_q=None):
+def listen_server(address, msg_queue, listen_server_event: Optional[Event] = None):
     with socket(AF_INET, SOCK_STREAM) as sock:
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen()
         logger.info(f"---Server Start: listening at {address[0]}:{address[1]}---")
         while True:
-            if listen_server_command_q and not listen_server_command_q.empty():
+            if listen_server_event and listen_server_event.is_set():
                 break
             client, addr = sock.accept()
             result = handle_socket_client(client, addr, msg_queue)
