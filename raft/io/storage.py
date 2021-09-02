@@ -67,3 +67,7 @@ class FileStorage:
         self.stored_item_count += 1
         with open(self.data_storage_filepath, "ab") as fl:
             fl.write(entry)
+
+
+class AsyncFileStorage:
+    pass

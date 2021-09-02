@@ -63,7 +63,7 @@ class Clock:
     def start(self):
         if not self.command_q.empty():
             # Clear out the queue so we may be restarted
-            self.command_q.get()
+            self.command_q.get_nowait()
 
         logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
         if self.thread is None:
@@ -90,5 +90,5 @@ class Clock:
             self.command_q.put_nowait(True)
         except queue.Full:
             pass
-        self.thread.join()
+        # self.thread.join()
         self.thread = None

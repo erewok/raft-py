@@ -14,7 +14,7 @@ from raft.models.server import LOG_FOLLOWER, LOG_LEADER
 logger = logging.getLogger("raft")
 
 
-class EventController:
+class ThreadedEventController:
     """The job of this class is to package up 'things that happen'
     into events (see `Event`). The msg queue goes to lower-level socket-listeners.
 
@@ -49,7 +49,7 @@ class EventController:
         # messages inbound should be placed here
         self.inbound_msg_queue: queue.Queue[bytes] = queue.Queue(maxsize=20)
         # inbound messages get translated to events here: InboundMsg -> Event
-        self.events: queue.Queue[Event] = queue.Queue(maxsize=100)
+        self.events: queue.Queue[Event] = queue.Queue(maxsize=20)
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
 
@@ -176,17 +176,23 @@ class EventController:
             self.election_timer.stop()
 
 
-class RaftNode:
+class ThreadedRuntime:
     def __init__(self, node_id: int, config: Config, storage_factory):
         storage = storage_factory(node_id, config)
         self.debug = config.debug
         self.instance: Server = Follower(node_id, config, storage)
         self.termination_sentinel = object()
-        self.event_controller = EventController(
+        self.event_controller = ThreadedEventController(
             node_id, config, termination_sentinel=self.termination_sentinel
         )
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         self.thread = None
+        self.runtime_events = set((
+            EventType.DEBUG_REQUEST,
+            EventType.ResetElectionTimeout,
+            EventType.ConversionToFollower,
+            EventType.ConversionToLeader
+        ))
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
@@ -211,24 +217,32 @@ class RaftNode:
             logger.info(f"*--- RaftNode is currently {self.instance.__class__} ---*")
         self.event_controller.run_heartbeat()
 
-    def handle_event(self, event):
+    def runtime_handle_event(self, event):
+        """For events that need to interact with the runtime"""
         if event.type == EventType.DEBUG_REQUEST:
             self.handle_debug_event(event)
         elif event.type == EventType.ResetElectionTimeout:
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
             logger.info(f"*--- RaftNode Converting to {LOG_FOLLOWER} ---*")
-            # self.handle_stop_heartbeat(event)
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
-            # should only be on leaders
             logger.info(f"*--- RaftNode Converting to {LOG_LEADER} ---*")
-            # self.handle_start_heartbeat(event)
-            # self.handle_stop_election_timeout(event)
 
+    def drop_event(self, event):
+        if event.type == EventType.HeartbeatTime and isinstance(self.instance, Follower):
+            return True
+        return False
+
+    def handle_event(self, event):
+        """Primary event handler"""
         msg_type = "none"
+        if self.drop_event(event):
+            return None
         if event.msg:
             msg_type = event.msg.type
+        if event.type in self.runtime_events:
+            self.runtime_handle_event(event)
 
         logger.info(
             f"*--- RaftNode Handling event: EventType={event.type} MsgType={msg_type} ---*"
@@ -244,9 +258,10 @@ class RaftNode:
             )
             for response in responses:
                 self.event_controller.add_response_to_queue(response)
+
             for further_event in more_events:
-                if further_event.type == EventType.ResetElectionTimeout:
-                    self.handle_reset_election_timeout(further_event)
+                if further_event.type in self.runtime_events:
+                    self.runtime_handle_event(further_event)
                 else:
                     self.event_controller.events.put(further_event)
 
@@ -257,7 +272,6 @@ class RaftNode:
                 break
             try:
                 event = self.event_controller.events.get_nowait()
-                self.event_controller.events.task_done()
             except queue.Empty:
                 continue
             if event is self.termination_sentinel:
