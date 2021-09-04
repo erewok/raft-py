@@ -21,7 +21,7 @@ def get_storage_class(runtime, storage_class):
     if runtime == runtimes.ThreadedRuntime and storage_class == storage.AsyncFileStorage:
         raise ValueError(f"Incompatible storage class: AsyncFileStorage with ThreadedRuntime")
     if runtime == runtimes.AsyncRuntime and storage_class == storage.FileStorage:
-        raise ValueError(f"Incompatible storage class: AsyncRuntime with AsyncRuntime")
+        raise ValueError(f"Incompatible storage class: AsyncRuntime with Sync FileStorage")
     return storage_class
 
 
