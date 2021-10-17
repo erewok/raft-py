@@ -4,7 +4,7 @@ This is a work-in-progress attempt to implement Raft in Python.
 
 ## Running
 
-To run this using the provided `ini` file, you can invoke it like this using a node-id from 1 to 5:
+To run this using the provided `ini` file, you can invoke it using a node-id from 1 to 5:
 
 ```sh
 $ python -m raft -c raft.ini -n 2

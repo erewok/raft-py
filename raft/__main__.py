@@ -63,4 +63,4 @@ if __name__ == "__main__":  # pragma: nocover
     conf = configparser.ConfigParser()
     conf.read(args.config)
     config = Config(conf)
-    main(args.node_id, config)
+    main(args.node_id, config, runtime=args.runtime)
