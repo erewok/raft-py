@@ -283,7 +283,10 @@ class ThreadedRuntime:
 
             self.handle_event(event)
             logger.info(
-                f"*--- RaftNode Handled event with qsize now \x1b[33m{self.event_controller.events.qsize()}\x1b[0m ---*"
+                (
+                    "*--- RaftNode Handled event with qsize now "
+                    f"\x1b[33m{self.event_controller.events.qsize()}\x1b[0m ---*"
+                )
             )
         logger.warn("*--- RaftNode Stop: Shutting down primary event handler ---*")
 
