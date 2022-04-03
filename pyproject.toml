@@ -1,0 +1,44 @@
+
+[tool.poetry]
+name = "raft"
+homepage = "https://github.com/erewok/raft-py"
+version = "0.1.0"
+description = "Implementation of raft in python"
+authors = ["Erik Aker <eraker@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Typing :: Typed",
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+aiofiles = { version = "^0.8.0", optional = true }
+rich = { version = "^12.1.0", optional = true }
+trio = { version = "^0.20.0", optional = true }
+
+[tool.poetry.extras]
+all = ["aiofiles", "trio", "rich"]
+async = ["aiofiles", "trio"]
+rich = ["rich"]
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.1"
+pytest-cov = "^3.0.0"
+pytest-pycodestyle = "^2.3.0"
+mypy = "^0.942"
+pytest-mypy = "^0.9.1"
+hypothesis = "^6.41.0"
+black = "^22.3.0"
+isort = "^5.10.1"
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

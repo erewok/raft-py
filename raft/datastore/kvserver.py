@@ -1,11 +1,10 @@
 import json
-from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 import traceback
 import typing
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
 
 from .parser import Command, parse
 from .transport import receive_message, send_message
-
 
 DATA_STORE: typing.Dict[str, str] = {}
 

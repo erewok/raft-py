@@ -1,6 +1,7 @@
 import json
-from socket import socket, AF_INET, SOCK_STREAM
-from .parser import parse, command_to_json
+from socket import AF_INET, SOCK_STREAM, socket
+
+from .parser import command_to_json, parse
 from .transport import receive_message, send_message
 
 

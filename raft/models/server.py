@@ -17,23 +17,17 @@ to another as follows:
   - Leader ->    { Follower }
 """
 from __future__ import annotations
-from collections import namedtuple
+
 import json
 import logging
+from collections import namedtuple
 from typing import Generic, List, Optional, Set, Tuple, TypeVar, Union
 
 from raft.io import transport
-from raft.models import Event, EventType
-from raft.models import (
-    EVENT_CONVERSION_TO_FOLLOWER,
-    EVENT_CONVERSION_TO_LEADER,
-    EVENT_HEARTBEAT,
-    EVENT_SELF_WON_ELECTION,
-)
+from raft.models import (EVENT_CONVERSION_TO_FOLLOWER,
+                         EVENT_CONVERSION_TO_LEADER, EVENT_HEARTBEAT,
+                         EVENT_SELF_WON_ELECTION, Event, EventType, log, rpc)
 from raft.models.helpers import Config
-from raft.models import log
-from raft.models import rpc
-
 
 logger = logging.getLogger(__name__)
 # In some cases, we want to trigger _new_ events _from_ events
@@ -185,8 +179,9 @@ class Candidate(BaseServer, Generic[S]):
             or event_term > self.current_term
         ):
             self.current_term = event_term
-            return self.convert(Follower), ResponsesEvents(
-                [], [EVENT_CONVERSION_TO_FOLLOWER]
+            return (
+                self.convert(Follower),
+                ResponsesEvents([], [EVENT_CONVERSION_TO_FOLLOWER]),
             )
         if event.type == EventType.ElectionTimeoutStartElection:
             logger.info(f"{LOG_CANDIDATE} is calling a new election")
@@ -472,8 +467,9 @@ class Leader(BaseServer, Generic[S]):
                 )
             )
             self.current_term = event_term
-            return self.convert(Follower), ResponsesEvents(
-                [], [EVENT_CONVERSION_TO_FOLLOWER]
+            return (
+                self.convert(Follower),
+                ResponsesEvents([], [EVENT_CONVERSION_TO_FOLLOWER]),
             )
 
         if event.type == EventType.AppendEntryConfirm:

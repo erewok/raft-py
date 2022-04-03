@@ -1,13 +1,12 @@
 import configparser
-from functools import cached_property
 import logging
 import queue
 import random
 import threading
+from functools import cached_property
 from typing import Callable
 
 from . import Event, EventType
-
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class Config:
             all_nodes[n] = {"label": node_conf["Label"], "addr": addr}
         return all_nodes
 
-    @cached_property
+    @property
     def get_election_timeout(self):
         def inner():
             return (
@@ -62,7 +61,9 @@ class Clock:
     def start(self):
         logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
         if self.thread is None:
-            self.thread = threading.Thread(target=self.generate_ticks, args=(self.event_queue,))
+            self.thread = threading.Thread(
+                target=self.generate_ticks, args=(self.event_queue,)
+            )
         self.thread.start()
 
     def generate_ticks(self, event_q):

@@ -1,5 +1,4 @@
-from socket import socket, AF_INET, SOCK_STREAM
-
+from socket import AF_INET, SOCK_STREAM, socket
 
 HEADER_LEN = 10
 DEFAULT_MSG_LEN = 4096
@@ -57,7 +56,7 @@ def echo_test(address):
     sock = socket(AF_INET, SOCK_STREAM)
     sock.connect(address)
     for n in range(0, 8):
-        msg = b"x" * (10 ** n)  # 1, 10, 100, 1000, 10000, bytes etc...
+        msg = b"x" * (10**n)  # 1, 10, 100, 1000, 10000, bytes etc...
         print(f"Sending message of length {10**n} (n is {n})")
         send_message(sock, msg)
         response = receive_message(sock)

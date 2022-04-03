@@ -4,12 +4,10 @@ import threading
 
 from raft.io import loggers  # noqa
 from raft.io import transport
-from raft.models import Event, EventType, EVENT_CONVERSION_TO_FOLLOWER  # noqa
+from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
 from raft.models.helpers import Clock, Config
-from raft.models.rpc import RpcBase, MsgType, parse_msg  # noqa
-from raft.models.server import Follower, Server
-from raft.models.server import LOG_FOLLOWER, LOG_LEADER
-
+from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
+from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
 
 logger = logging.getLogger("raft")
 
@@ -187,12 +185,14 @@ class ThreadedRuntime:
         )
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         self.thread = None
-        self.runtime_events = set((
-            EventType.DEBUG_REQUEST,
-            EventType.ResetElectionTimeout,
-            EventType.ConversionToFollower,
-            EventType.ConversionToLeader
-        ))
+        self.runtime_events = set(
+            (
+                EventType.DEBUG_REQUEST,
+                EventType.ResetElectionTimeout,
+                EventType.ConversionToFollower,
+                EventType.ConversionToLeader,
+            )
+        )
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
@@ -230,7 +230,9 @@ class ThreadedRuntime:
             logger.info(f"*--- RaftNode Converting to {LOG_LEADER} ---*")
 
     def drop_event(self, event):
-        if event.type == EventType.HeartbeatTime and isinstance(self.instance, Follower):
+        if event.type == EventType.HeartbeatTime and isinstance(
+            self.instance, Follower
+        ):
             return True
         return False
 

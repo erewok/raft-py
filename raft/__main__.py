@@ -2,11 +2,11 @@ import configparser
 import logging
 import sys
 
+from raft import runtimes
+
 from .io import loggers  # noqa
 from .io import storage
 from .models.helpers import Config
-from raft import runtimes
-
 
 logger = logging.getLogger("raft")
 
@@ -18,10 +18,17 @@ def get_storage_class(runtime, storage_class):
     if not hasattr(storage, storage_class):
         raise ValueError(f"Invalid storage class: {storage_class}")
     storage_class = getattr(storage, storage_class)
-    if runtime == runtimes.ThreadedRuntime and storage_class == storage.AsyncFileStorage:
-        raise ValueError(f"Incompatible storage class: AsyncFileStorage with ThreadedRuntime")
+    if (
+        runtime == runtimes.ThreadedRuntime
+        and storage_class == storage.AsyncFileStorage
+    ):
+        raise ValueError(
+            "Incompatible storage class: AsyncFileStorage with ThreadedRuntime"
+        )
     if runtime == runtimes.AsyncRuntime and storage_class == storage.FileStorage:
-        raise ValueError(f"Incompatible storage class: AsyncRuntime with Sync FileStorage")
+        raise ValueError(
+            "Incompatible storage class: AsyncRuntime with Sync FileStorage"
+        )
     return storage_class
 
 
@@ -55,9 +62,7 @@ if __name__ == "__main__":  # pragma: nocover
     parser.add_argument(
         "--node-id", "-n", help="Node Id (int)", type=int, required=True
     )
-    parser.add_argument(
-        "--runtime", "-r", help="Runtime class"
-    )
+    parser.add_argument("--runtime", "-r", help="Runtime class")
     args = parser.parse_args()
 
     conf = configparser.ConfigParser()

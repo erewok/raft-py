@@ -1,12 +1,10 @@
 import concurrent.futures
 import logging
-
-# import queue
-from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
-from threading import Event
 import traceback
+# import queue
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
+from threading import Event
 from typing import Dict, List, Optional, Tuple
-
 
 HEADER_LEN = 10
 DEFAULT_MSG_LEN = 4096

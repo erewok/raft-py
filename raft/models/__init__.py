@@ -1,7 +1,6 @@
 import enum
 from typing import Any
 
-
 # Next == /\ \/ \E i \in Server : Restart(i)
 #            \/ \E i \in Server : Timeout(i)
 #            \/ \E i,j \in Server : RequestVote(i, j)

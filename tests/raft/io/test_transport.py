@@ -12,7 +12,7 @@ import pytest
 from raft.io import transport
 
 
-MSG_SIZES = [b"x" * (10 ** n) for n in range(0, 8)]
+MSG_SIZES = [b"x" * (10**n) for n in range(0, 8)]
 DEFAULT_ADDRESS = ("", 40000)
 
 

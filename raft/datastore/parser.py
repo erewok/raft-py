@@ -2,7 +2,6 @@ import enum
 import logging
 from typing import List, Optional, Tuple
 
-
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(
     "[%(levelname)s] %(asctime)s >> %(message)s", "%Y-%m-%d %H:%M:%S"

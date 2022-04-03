@@ -1,12 +1,11 @@
-from abc import ABC, abstractmethod
 import enum
 import json
+from abc import ABC, abstractmethod
 from operator import methodcaller
-from raft.io import transport
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
+from raft.io import transport
 from raft.models.log import LogEntry
-
 
 RPC = TypeVar("RPC", bound="RpcBase")
 

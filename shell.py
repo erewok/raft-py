@@ -2,7 +2,7 @@ import configparser
 import json
 
 from raft.io import loggers  # noqa
-from raft.io import storage # noqa
+from raft.io import storage  # noqa
 from raft.io.transport import client_send_msg  # noqa
 from raft.models import Event, EventType
 from raft.models import log
@@ -18,15 +18,17 @@ config = Config(conf)
 ec = ThreadedEventController(1, config)
 runner = ThreadedRuntime(1, config, storage.InMemoryStorage)
 HEARTBEAT_EVENT = Event(EventType.HeartbeatTime, None)
-append_req = json.dumps({
-    "term": 11,
-    "leader_id": 1,
-    "prev_log_index": 11,
-    "prev_log_term": 11,
-    "entries": [{"command": "a", "term": 11}],
-    "leader_commit_index": 1,
-    "type": int(rpc.MsgType.AppendEntriesRequest)
-}).encode("utf-8")
+append_req = json.dumps(
+    {
+        "term": 11,
+        "leader_id": 1,
+        "prev_log_index": 11,
+        "prev_log_term": 11,
+        "entries": [{"command": "a", "term": 11}],
+        "leader_commit_index": 1,
+        "type": int(rpc.MsgType.AppendEntriesRequest),
+    }
+).encode("utf-8")
 
 
 # # # # # # # # # # # # # # # # #
@@ -34,7 +36,7 @@ append_req = json.dumps({
 # # # # # # # # # # # # # # # # #
 def make_log(terms):
     rlg = log.Log()
-    rlg.log = [log.LogEntry(term, b'x') for term in terms]
+    rlg.log = [log.LogEntry(term, b"x") for term in terms]
     return rlg
 
 
@@ -45,15 +47,15 @@ fig7_sample_msg = {
     "prev_log_term": 6,
     "entries": [{"command": "b", "term": 7}],
     "leader_commit_index": 9,
-    "type": int(rpc.MsgType.AppendEntriesRequest)
+    "type": int(rpc.MsgType.AppendEntriesRequest),
 }
-leader_log = make_log([1,1,1,4,4,5,5,6,6,6])
-a_log = make_log([1,1,1,4,4,5,5,6,6])
-b_log = make_log([1,1,1,4])
-c_log = make_log([1,1,1,4,4,5,5,6,6,6,6])
-d_log = make_log([1,1,1,4,4,5,5,6,6,6,7,7])
-e_log = make_log([1,1,1,4,4,4,4])
-f_log = make_log([1,1,1,2,2,2,3,3,3,3,3])
+leader_log = make_log([1, 1, 1, 4, 4, 5, 5, 6, 6, 6])
+a_log = make_log([1, 1, 1, 4, 4, 5, 5, 6, 6])
+b_log = make_log([1, 1, 1, 4])
+c_log = make_log([1, 1, 1, 4, 4, 5, 5, 6, 6, 6, 6])
+d_log = make_log([1, 1, 1, 4, 4, 5, 5, 6, 6, 6, 7, 7])
+e_log = make_log([1, 1, 1, 4, 4, 4, 4])
+f_log = make_log([1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3])
 
 
 def create_leader(with_fig7_followers=False):
@@ -100,9 +102,6 @@ def client_send_req(leader_id, command):
     payload = {
         "type": "ClientRequest",
         "body": command,
-        "callback_addr": ["127.0.0.1", 9999]
+        "callback_addr": ["127.0.0.1", 9999],
     }
-    return client_send_msg(
-        addr,
-        json.dumps(payload).encode("utf-8")
-    )
+    return client_send_msg(addr, json.dumps(payload).encode("utf-8"))
