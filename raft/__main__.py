@@ -50,8 +50,8 @@ def main(node_id, config, runtime="ThreadedRuntime"):
     try:
         node.run()
     except KeyboardInterrupt:
-        logger.warning("\x1b[31m*--- SHUTTING DOWN ---*\x1b[0m")
-        logger.warning("\x1b[31m*--- PLEASE WAIT FOR FULL STOP ---*\x1b[0m")
+        logger.warning("SHUTTING DOWN")
+        logger.warning("PLEASE WAIT FOR FULL STOP")
         node.stop()
     sys.exit(0)
 

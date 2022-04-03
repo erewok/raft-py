@@ -129,7 +129,7 @@ def test_follower_msg_append(
 def test_follower_candidate_convert(etype, new_class, candidate):
     event = Event(etype, None)
     inst, resps = candidate.handle_event(event)
-    assert resps is None
+    assert not resps.responses
     if new_class is None:
         assert inst == candidate
         return
@@ -254,14 +254,14 @@ def test_leader_handle_event(leader, sample_append_confirm_rpc):
     leader.current_term = 20
     # should not convert
     inst, maybe_resp_evs = leader.handle_event(event)
-    assert maybe_resp_evs is None
+    assert not maybe_resp_evs
     assert inst is leader
 
     # Try to coerce it to convert
     event.msg.term = 100
     inst2, maybe_resp_evs = leader.handle_event(event)
     assert inst2 is not leader
-    assert maybe_resp_evs is None
+    assert not maybe_resp_evs.responses
     assert isinstance(inst2, server.Follower)
 
 

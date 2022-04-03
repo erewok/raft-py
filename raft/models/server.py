@@ -23,7 +23,7 @@ import logging
 from collections import namedtuple
 from typing import Generic, List, Optional, Set, Tuple, TypeVar, Union
 
-from raft.io import transport
+from raft.io import loggers, transport
 from raft.models import (
     EVENT_CONVERSION_TO_FOLLOWER,
     EVENT_CONVERSION_TO_LEADER,
@@ -42,9 +42,13 @@ logger = logging.getLogger(__name__)
 # Either `responses` or `events` may be None
 ResponsesEvents = namedtuple("ResponsesEvents", ("responses", "events"))
 MaybeResponsesEvents = Optional[ResponsesEvents]
-LOG_LEADER = "\x1b[31m[Leader]\x1b[0m"
-LOG_CANDIDATE = "\x1b[33m[Candidate]\x1b[0m"
-LOG_FOLLOWER = "\x1b[32m[Follower]\x1b[0m"
+LOG_LEADER = "Leader"
+LOG_CANDIDATE = "Candidate"
+LOG_FOLLOWER = "Follower"
+if loggers.RICH_HANDLING_ON:
+    LOG_LEADER = "[bold red]Leader[/]"
+    LOG_CANDIDATE = "[bold yellow]Candidate[/]"
+    LOG_FOLLOWER = "[bold green]Follower[/]"
 
 S = TypeVar("S", bound="BaseServer")
 # This is defined at the bottom

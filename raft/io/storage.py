@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import logging
 import os
 import time
@@ -16,7 +17,17 @@ except ImportError:
     trio = None
 
 
-class InMemoryStorage:
+class BaseStorage:
+    @abstractmethod
+    def save_metadata(self, value: bytes):
+        raise NotImplementedError("Implement `save_metadata`")
+
+    @abstractmethod
+    def save_log_entry(self, entry):
+        raise NotImplementedError("Implement `save_log_entry`")
+
+
+class InMemoryStorage(BaseStorage):
     def __init__(self, node_id: int, _: Config):
         self.log: List[bytes] = []
         self.metadata: Dict[str, Any] = {"node_id": node_id}
@@ -29,7 +40,7 @@ class InMemoryStorage:
         self.log.append(entry)
 
 
-class FileStorage:
+class FileStorage(BaseStorage):
     def __init__(self, node_id: int, config: Config):
         self.data_directory = config.data_directory
         self.node_label = config.node_mapping[node_id]["label"]
@@ -80,7 +91,7 @@ class FileStorage:
             fl.write(entry)
 
 
-class AsyncFileStorage:
+class AsyncFileStorage(BaseStorage):
     def __init__(self, node_id: int, config: Config):
         self.data_directory = config.data_directory
         self.node_label = config.node_mapping[node_id]["label"]

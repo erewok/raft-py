@@ -58,6 +58,7 @@ if RICH_HANDLING_ON:
         "level": "INFO",
         "class": "rich.logging.RichHandler",
         "rich_tracebacks": True,
+        "markup": True,
     }
 
 logging.config.dictConfig(LOGGING_CONFIG)
