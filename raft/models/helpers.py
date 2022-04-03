@@ -6,6 +6,7 @@ import threading
 from functools import cached_property
 from typing import Callable
 
+from raft.io import loggers
 from . import Event, EventType
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,12 @@ class Clock:
         self.event_type = event_type
         self.command_event: threading.Event = threading.Event()
         self.thread = None
+        self._log_name = f"[Clock - {str(self.event_type)}]"
+        if loggers.RICH_HANDLING_ON:
+            self._log_name = f"[[yellow]Clock[/] - [blue]{str(self.event_type)}[/]]"
 
     def start(self):
-        logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
+        logger.info(f"{self._log_name} is starting up")
         if self.thread is None:
             self.thread = threading.Thread(
                 target=self.generate_ticks, args=(self.event_queue,)
@@ -69,10 +73,9 @@ class Clock:
     def generate_ticks(self, event_q):
         interval = self.interval_func() if self.interval_func else self.interval
         while not self.command_event.wait(interval):
-            logger.info(f"[Clock] event: {str(self.event_type)}")
+            logger.debug(f"{self._log_name}")
             event_q.put(Event(self.event_type, None))
-
-        logger.debug(f"[Clock - {str(self.event_type)}] is shutting down")
+        logger.info(f"{self._log_name} is shutting down")
 
     def stop(self):
         self.command_event.set()

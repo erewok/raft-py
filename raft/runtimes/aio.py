@@ -6,7 +6,7 @@ from raft.io import transport
 from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
 from raft.models.helpers import Clock, Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
-from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
+from raft.models.server import Follower, Server
 
 from .base import BaseEventController, BaseRuntime
 

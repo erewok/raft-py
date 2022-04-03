@@ -2,12 +2,11 @@ import logging
 import queue
 import threading
 
-from raft.io import loggers  # noqa
-from raft.io import transport
+from raft.io import loggers, transport
 from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
 from raft.models.helpers import Clock, Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
-from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
+from raft.models.server import Follower, Leader, Server
 from .base import BaseEventController, BaseRuntime
 
 
@@ -54,6 +53,10 @@ class ThreadedEventController(BaseEventController):
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
 
+        self._log_name = f"[EventController]"
+        if loggers.RICH_HANDLING_ON:
+            self._log_name = f"[[green]EventController[/]]"
+
     def add_response_to_queue(self, msg):
         try:
             self.outbound_msg_queue.put_nowait((msg.dest, msg.to_bytes()))  # type: ignore
@@ -89,7 +92,7 @@ class ThreadedEventController(BaseEventController):
 
     def process_inbound_msgs(self):
         """Received Messages -> Events Queue"""
-        logger.info(f"EventController Start: process inbound messages")
+        logger.info(f"{self._log_name} Start: process inbound messages")
         while True:
             if self.command_event.is_set():
                 break
@@ -101,14 +104,14 @@ class ThreadedEventController(BaseEventController):
             event_type = event.type if event is not None else "none"
             logger.info(
                 (
-                    f"EventController turned item {str(item)} "
+                    f"{self._log_name} turned item {str(item)} "
                     f"into {event_type} even with qsize now {self.events.qsize()}"
                 )
             )
-        logger.info(f"EventController Stop: process inbound messages")
+        logger.info(f"{self._log_name} Stop: process inbound messages")
 
     def process_outbound_msgs(self):
-        logger.info(f"EventController Start: process outbound messages")
+        logger.info(f"{self._log_name} Start: process outbound messages")
         while True:
             if self.command_event.is_set():
                 break
@@ -120,8 +123,8 @@ class ThreadedEventController(BaseEventController):
             logger.debug(f"Outbound_Msg={item}")
             (addr, msg_bytes) = item
             transport.client_send_msg(addr, msg_bytes)
-            logger.debug(f"EventController sent item {msg_bytes.decode()}")
-        logger.info(f"EventController Stop: process outbound messages")
+            logger.debug(f"{self._log_name} sent item {msg_bytes.decode()}")
+        logger.info(f"{self._log_name} Stop: process outbound messages")
 
     def run(self):
         # Launch request listener
@@ -197,11 +200,17 @@ class ThreadedRuntime(BaseRuntime):
             )
         )
 
+    @property
+    def log_name(self):
+        if loggers.RICH_HANDLING_ON:
+            return f"[[green]Runtime[/] - {self.instance.log_name}]"
+        return f"[Runtime - {self.instance.log_name}]"
+
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
         if self.debug:
-            logger.info("RaftNode DEBUGGING Event")
-            logger.info(f"RaftNode is currently {self.instance.__class__}")
+            logger.info(f"{self.log_name} DEBUGGING Event")
+            logger.info(f"{self.log_name} is currently {self.instance.__class__}")
             for key in filter(
                 lambda el: el not in no_dump_keys, self.instance.transfer_attrs
             ):
@@ -211,13 +220,13 @@ class ThreadedRuntime(BaseRuntime):
 
     def handle_reset_election_timeout(self, _: Event):
         if self.debug:
-            logger.info("RaftNode resetting election timer")
+            logger.info(f"{self.log_name} resetting election timer")
         self.event_controller.run_election_timeout_timer()
 
     def handle_start_heartbeat(self, _: Event):
         if self.debug:
-            logger.info("RaftNode starting heartbeat")
-            logger.info(f"RaftNode is currently {self.instance.__class__}")
+            logger.info(f"{self.log_name} starting heartbeat")
+            logger.info(f"{self.log_name} is currently {self.instance.__class__}")
         self.event_controller.run_heartbeat()
 
     def runtime_handle_event(self, event):
@@ -227,10 +236,10 @@ class ThreadedRuntime(BaseRuntime):
         elif event.type == EventType.ResetElectionTimeout:
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
-            logger.info(f"RaftNode Converting to {LOG_FOLLOWER}")
+            logger.info(f"{self.log_name} Converting to {Follower.log_name}")
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
-            logger.info(f"RaftNode Converting to {LOG_LEADER}")
+            logger.info(f"{self.log_name} Converting to {Leader.log_name}")
 
     def drop_event(self, event):
         if event.type == EventType.HeartbeatTime and isinstance(
@@ -250,28 +259,26 @@ class ThreadedRuntime(BaseRuntime):
             self.runtime_handle_event(event)
 
         logger.info(
-            f"RaftNode Handling event: EventType={event.type} MsgType={msg_type}"
+            f"{self.log_name} Handling event: EventType={event.type} MsgType={msg_type}"
         )
-        self.instance, maybe_responses_events = self.instance.handle_event(event)
-        if maybe_responses_events is not None:
-            responses, more_events = maybe_responses_events
-            responses = responses or []
-            more_events = more_events or []
+        self.instance, (responses, more_events) = self.instance.handle_event(event)
+        if responses:
             logger.info(f"RaftNode Event OutboundMsg={len(responses)}")
+        if more_events:
             logger.info(
-                f"RaftNode Event FurtherEventCount={len(more_events)}"
+                f"{self.log_name} Event FurtherEventCount={len(more_events)}"
             )
-            for response in responses:
-                self.event_controller.add_response_to_queue(response)
+        for response in responses:
+            self.event_controller.add_response_to_queue(response)
 
-            for further_event in more_events:
-                if further_event.type in self.runtime_events:
-                    self.runtime_handle_event(further_event)
-                else:
-                    self.event_controller.events.put(further_event)
+        for further_event in more_events:
+            if further_event.type in self.runtime_events:
+                self.runtime_handle_event(further_event)
+            else:
+                self.event_controller.events.put(further_event)
 
     def run_event_handler(self):
-        logger.warn("RaftNode Start: primary event handler")
+        logger.warn(f"{self.log_name} Start: primary event handler")
         while True:
             if not self.command_q.empty():
                 break
@@ -285,19 +292,19 @@ class ThreadedRuntime(BaseRuntime):
                 break
 
             self.handle_event(event)
-            logger.info(
+            logger.debug(
                 (
-                    "RaftNode Handled event with qsize now "
+                    f"{self.log_name} Handled event with qsize now "
                     f"{self.event_controller.events.qsize()}"
                 )
             )
-        logger.warn("RaftNode Stop: Shutting down primary event handler")
+        logger.warn(f"{self.log_name} Stop: Shutting down primary event handler")
 
     def run(self, foreground=True):
         if self.debug:
             fg_or_bg = "foreground" if foreground else "background"
-            logger.warn(f"RaftNode is starting in DEBUG mode")
-            logger.warn(f"RaftNode will run in the {fg_or_bg} ")
+            logger.warn(f"{self.log_name} is starting in DEBUG mode")
+            logger.warn(f"{self.log_name} will run in the {fg_or_bg} ")
 
         # Trigger event that makes it so that the correct timers start/stop
         self.event_controller.run()

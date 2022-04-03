@@ -41,18 +41,13 @@ logger = logging.getLogger(__name__)
 # We may also want to issue _responses_. We need to disambiguate these
 # Either `responses` or `events` may be None
 ResponsesEvents = namedtuple("ResponsesEvents", ("responses", "events"))
-MaybeResponsesEvents = Optional[ResponsesEvents]
-LOG_LEADER = "Leader"
-LOG_CANDIDATE = "Candidate"
-LOG_FOLLOWER = "Follower"
-if loggers.RICH_HANDLING_ON:
-    LOG_LEADER = "[bold red]Leader[/]"
-    LOG_CANDIDATE = "[bold yellow]Candidate[/]"
-    LOG_FOLLOWER = "[bold green]Follower[/]"
-
 S = TypeVar("S", bound="BaseServer")
 # This is defined at the bottom
 # Server = Union[Leader[S], Candidate[S], Follower[S]]
+
+
+def empty_response() -> ResponsesEvents:
+    return ResponsesEvents([], [])
 
 
 class BaseServer(Generic[S]):
@@ -90,6 +85,11 @@ class BaseServer(Generic[S]):
             "current_term",
             "log",
         )
+        self._log_name = "Server"
+
+    @property
+    def log_name(self):
+        return self._log_name
 
     @property
     def address(self):
@@ -133,6 +133,9 @@ class Candidate(BaseServer, Generic[S]):
 
     Each _new_ Candidate will _increment_ the `current_term`
     """
+    log_name = "Candidate"
+    if loggers.RICH_HANDLING_ON:
+        log_name = "[bold yellow]Candidate[/]"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -159,32 +162,31 @@ class Candidate(BaseServer, Generic[S]):
             all_msgs.append(msg)  # type: ignore
         return all_msgs
 
-    def handle_start_election(self, _: Event) -> MaybeResponsesEvents:
+    def handle_start_election(self, _: Event) -> ResponsesEvents:
         all_msgs = self.construct_request_vote_rpcs()
         return ResponsesEvents(all_msgs, [])
 
-    def handle_vote_response(self, event: Event) -> MaybeResponsesEvents:
+    def handle_vote_response(self, event: Event) -> ResponsesEvents:
         if event.msg.source_node_id not in self.votes_received:
             self.votes_received.add(event.msg.source_node_id)
 
         if len(self.votes_received) >= self.quorom:
-            logger.info(f"{LOG_CANDIDATE} has received votes from a quorum of servers")
+            logger.info(f"{self._log_name} has received votes from a quorum of servers")
             # We should immediately trigger a heartbeat here
-            # to assert our leaders EventType.HeartbeatTime
+            # to assert our leader's EventType.HeartbeatTime
             # We're also supposed to commit a NOOP into the log
             events = [
                 EVENT_SELF_WON_ELECTION,
                 EVENT_HEARTBEAT,
             ]
             return ResponsesEvents([], events)
-        else:
-            return None
+        return empty_response()
 
-    def handle_event(self, event: Event) -> Tuple[Server, MaybeResponsesEvents]:
+    def handle_event(self, event: Event) -> Tuple[Server, ResponsesEvents]:
         event_term = -2
         if event.msg and hasattr(event.msg, "term"):
             event_term = event.msg.term
-        responses_events = None
+        responses_events = empty_response()
         if (
             event.type == EventType.LeaderAppendLogEntryRpc
             or event_term > self.current_term
@@ -195,12 +197,12 @@ class Candidate(BaseServer, Generic[S]):
                 ResponsesEvents([], [EVENT_CONVERSION_TO_FOLLOWER]),
             )
         if event.type == EventType.ElectionTimeoutStartElection:
-            logger.info(f"{LOG_CANDIDATE} is calling a new election")
+            logger.info(f"{self._log_name} is calling a new election")
             new_instance = self.convert(Candidate).increment_term()
             responses_events = new_instance.handle_start_election(event)
             return new_instance, responses_events
         if event.type == EventType.SelfWinElection:
-            logger.info(f"{LOG_CANDIDATE} has won the election")
+            logger.info(f"{self._log_name} has won the election")
             leader = self.convert(Leader)
             return leader, ResponsesEvents([], [EVENT_CONVERSION_TO_LEADER])
         if event.type == EventType.ReceiveServerCandidateVote:
@@ -229,16 +231,19 @@ class Follower(BaseServer, Generic[S]):
 
     A Follower can become a Candidate.
     """
+    log_name = "Follower"
+    if loggers.RICH_HANDLING_ON:
+        log_name = "[bold green]Follower[/]"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.known_leader_node_id = None
 
-    def handle_append_entries_message(self, event: Event) -> MaybeResponsesEvents:
+    def handle_append_entries_message(self, event: Event) -> ResponsesEvents:
         # An RPC sent by leader to replicate log entries (see Raft §5.3)
         # If entries is an empty list, this is meant to be a heartbeat (see Raft §5.2).
         logger.info(
-            f"{LOG_FOLLOWER} Received new append entries request with {len(event.msg.entries)} entries"
+            f"{self._log_name} Received new append entries request with {len(event.msg.entries)} entries"
         )
         success = self.log.append_entries(  # type: ignore
             prev_term=event.msg.prev_log_term,
@@ -254,7 +259,7 @@ class Follower(BaseServer, Generic[S]):
             if new_commit_index > self.commit_index:
                 self.commit_index = new_commit_index
                 logger.info(
-                    f"{LOG_FOLLOWER} Committed entries count is now {self.commit_index}"
+                    f"{self._log_name} Committed entries count is now {self.commit_index}"
                 )
 
                 if self.commit_index > self.last_applied:
@@ -262,11 +267,11 @@ class Follower(BaseServer, Generic[S]):
                         self.last_applied + 1 : self.commit_index + 1
                     ]
                     self.applied.extend(entries)
-                    logger.info(f"{LOG_FOLLOWER} AppliedEntries={entries}")
+                    logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
 
         logger.info(
-            f"{LOG_FOLLOWER} Message originating from {event.msg.source} to {event.msg.dest}"
+            f"{self._log_name} Message originating from {event.msg.source} to {event.msg.dest}"
         )
         msg: rpc.RPCMessage = rpc.AppendEntriesResponse(  # type: ignore
             term=self.current_term,
@@ -279,11 +284,11 @@ class Follower(BaseServer, Generic[S]):
             source=event.msg.dest,
         )
 
-        logger.info(f"{LOG_FOLLOWER} Append entries request was successful: {success}")
+        logger.info(f"{self._log_name} Append entries request was successful: {success}")
 
         return ResponsesEvents([msg], [Event(EventType.ResetElectionTimeout, None)])
 
-    def handle_request_vote_rpc(self, event: Event) -> MaybeResponsesEvents:
+    def handle_request_vote_rpc(self, event: Event) -> ResponsesEvents:
         """
         Follower can only vote for a Candidate in the following scenarios:
         - The Follower log has an amount of information <= Candidate's log
@@ -291,11 +296,11 @@ class Follower(BaseServer, Generic[S]):
         """
         logger.info(
             (
-                f"{LOG_FOLLOWER} Received request for votes from "
+                f"{self._log_name} Received request for votes from "
                 f"{event.msg.source} with ID {event.msg.candidate_id}"
             )
         )
-        logger.debug(f"{LOG_FOLLOWER} RequestVoteRpc={repr(event.msg)}")
+        logger.debug(f"{self._log_name} RequestVoteRpc={repr(event.msg)}")
 
         # See Raft §5.4.1:
         # "If the logs have last entries with different terms, then the log with the later
@@ -322,7 +327,7 @@ class Follower(BaseServer, Generic[S]):
         )
         self.voted_for = event.msg.candidate_id if grant_vote else self.voted_for
         logger.info(
-            f"{LOG_FOLLOWER} Follower granted vote to {event.msg.candidate_id}: {grant_vote}"
+            f"{self._log_name} vote granted to {event.msg.candidate_id}: {grant_vote}"
         )
         # We should _not_ trigger an election in this case otherwise we're doing so unecessarily
         # _If_ we need an election, then we should pick it up next time around.
@@ -331,18 +336,18 @@ class Follower(BaseServer, Generic[S]):
             further_events = [Event(EventType.ResetElectionTimeout, None)]
         return ResponsesEvents([msg], further_events)
 
-    def handle_event(self, event: Event) -> Tuple[Server, MaybeResponsesEvents]:
+    def handle_event(self, event: Event) -> Tuple[Server, ResponsesEvents]:
         event_term = None
         if event.msg and hasattr(event.msg, "term"):
             event_term = event.msg.term
         if event_term and event_term < self.current_term:
-            return self, None
+            return self, empty_response()
         if event_term and event_term > self.current_term:
             self.current_term = event_term
 
-        responses_events = None
+        responses_events = empty_response()
         if event.type == EventType.ElectionTimeoutStartElection:
-            logger.info(f"{LOG_FOLLOWER} Follower is calling an election")
+            logger.info(f"{self._log_name} is calling an election")
             new_instance = self.convert(Candidate).increment_term()
             responses_events = new_instance.handle_start_election(event)
             return new_instance, responses_events
@@ -369,6 +374,9 @@ class Leader(BaseServer, Generic[S]):
     """
     A Leader can become a Follower.
     """
+    log_name = "Leader"
+    if loggers.RICH_HANDLING_ON:
+        log_name = "[bold red]Leader[/]"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -386,9 +394,9 @@ class Leader(BaseServer, Generic[S]):
         self.log.append_entries(
             prev_index=prev_index, prev_term=prev_term, entries=[entry]
         )
-        return None
+        return empty_response()
 
-    def handle_append_entries_response(self, event: Event) -> MaybeResponsesEvents:
+    def handle_append_entries_response(self, event: Event) -> ResponsesEvents:
         """
         "success" needs to be translated into consensus.
         Log entries have to replicated on 3 machines (including the leader).
@@ -398,7 +406,7 @@ class Leader(BaseServer, Generic[S]):
         node_id = event.msg.source_node_id
         if event.msg.success:
             logger.info(
-                f"{LOG_LEADER} Append entries request was successful for node: {node_id}"
+                f"{self.log_name} Append entries request was successful for node: {node_id}"
             )
             self.match_index[node_id] = max(
                 event.msg.match_index, self.match_index[node_id]
@@ -411,7 +419,7 @@ class Leader(BaseServer, Generic[S]):
             if num_committed > self.commit_index:
                 self.commit_index = num_committed
                 logger.info(
-                    f"{LOG_LEADER} Committed entries count is now {self.commit_index}"
+                    f"{self.log_name} Committed entries count is now {self.commit_index}"
                 )
                 # Here is where committed log entries would be "applied" to the application.
                 if self.commit_index > self.last_applied:
@@ -419,12 +427,12 @@ class Leader(BaseServer, Generic[S]):
                         self.last_applied + 1 : self.commit_index + 1
                     ]
                     self.applied.extend(entries)
-                    logger.info(f"{LOG_LEADER} AppliedEntries={entries}")
+                    logger.info(f"{self.log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
         else:
-            logger.warning(f"{LOG_LEADER} Append entries Failed for node: {node_id}")
+            logger.warning(f"{self.log_name} Append entries Failed for node: {node_id}")
             self.next_index[node_id] = self.next_index[node_id] - 1
-        return None
+        return empty_response()
 
     def get_log_entries_for_node(self, node_id: int):
         expected = self.match_index[node_id]
@@ -455,17 +463,17 @@ class Leader(BaseServer, Generic[S]):
             all_msgs.append(msg)  # type: ignore
         return all_msgs
 
-    def handle_heartbeat_send(self, _: Event) -> MaybeResponsesEvents:
+    def handle_heartbeat_send(self, _: Event) -> ResponsesEvents:
         all_msgs = self.construct_append_entry_rpcs()
         return ResponsesEvents(all_msgs, [])
 
-    def handle_event(self, event: Event) -> Tuple[Server, MaybeResponsesEvents]:
-        responses = None
+    def handle_event(self, event: Event) -> Tuple[Server, ResponsesEvents]:
+        responses = empty_response()
         event_msg_type = event.msg.type if event.msg else "none"
         event_term = event.msg.term if event.msg and hasattr(event.msg, "term") else -1
         logger.info(
             (
-                f"{LOG_LEADER} Received Event with msg type "
+                f"{self.log_name} Received Event with msg type "
                 f"{event_msg_type} and term {event_term}"
             )
         )
@@ -473,7 +481,7 @@ class Leader(BaseServer, Generic[S]):
             # According to the paper, the server immediately steps down in this case
             logger.warning(
                 (
-                    f"{LOG_LEADER} with term *{self.current_term}* is stepping down "
+                    f"{self.log_name} with term *{self.current_term}* is stepping down "
                     f"after message with term *{event_term}* received"
                 )
             )
@@ -494,7 +502,7 @@ class Leader(BaseServer, Generic[S]):
     def validate_conversion(self, target_class):
         if target_class == Follower:
             return True
-        raise ValueError(f"{LOG_LEADER} Can only convert leader into a Follower")
+        raise ValueError(f"{self.log_name} Can only convert leader into a Follower")
 
 
 Server = Union[Leader[S], Candidate[S], Follower[S]]
