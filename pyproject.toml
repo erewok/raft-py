@@ -21,13 +21,12 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-aiofiles = { version = "^0.8.0", optional = true }
 rich = { version = "^12.1.0", optional = true }
 trio = { version = "^0.20.0", optional = true }
 
 [tool.poetry.extras]
 all = ["aiofiles", "trio", "rich"]
-async = ["aiofiles", "trio"]
+async = ["trio"]
 rich = ["rich"]
 
 [tool.poetry.dev-dependencies]

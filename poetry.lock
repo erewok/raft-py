@@ -1,12 +1,4 @@
 [[package]]
-name = "aiofiles"
-version = "0.8.0"
-description = "File support for asyncio."
-category = "main"
-optional = true
-python-versions = ">=3.6,<4.0"
-
-[[package]]
 name = "async-generator"
 version = "1.10"
 description = "Async generators and context managers for Python 3.5+"
@@ -443,20 +435,16 @@ optional = false
 python-versions = ">=3.6"
 
 [extras]
-all = ["aiofiles", "trio", "rich"]
-async = ["aiofiles", "trio"]
+all = ["trio", "rich"]
+async = ["trio"]
 rich = ["rich"]
 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "f150080b210fcb52282de8a849353f6c3aaae08f2e6ef9aecf02d1c98bd6a666"
+content-hash = "5f59ccce9799478f75da936d43943e05e8cac6bf4b23373588f3f44e07488297"
 
 [metadata.files]
-aiofiles = [
-    {file = "aiofiles-0.8.0-py3-none-any.whl", hash = "sha256:7a973fc22b29e9962d0897805ace5856e6a566ab1f0c8e5c91ff6c866519c937"},
-    {file = "aiofiles-0.8.0.tar.gz", hash = "sha256:8334f23235248a3b2e83b2c3a78a22674f39969b96397126cc93664d9a901e59"},
-]
 async-generator = [
     {file = "async_generator-1.10-py3-none-any.whl", hash = "sha256:01c7bf666359b4967d2cda0000cc2e4af16a0ae098cbffcb8472fb9e8ad6585b"},
     {file = "async_generator-1.10.tar.gz", hash = "sha256:6ebb3d106c12920aaae42ccb6f787ef5eefdcdd166ea3d628fa8476abe712144"},
