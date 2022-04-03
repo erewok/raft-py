@@ -8,10 +8,13 @@ from raft.models.helpers import Clock, Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
 
+from .base import BaseEventController, BaseRuntime
+
+
 logger = logging.getLogger("raft")
 
 
-class AsyncEventController:
+class AsyncEventController(BaseEventController):
     def __init__(self, node_id, config, termination_sentinel=None):
         self.node_id = node_id
         self.debug = config.debug
@@ -27,7 +30,7 @@ class AsyncEventController:
         )
 
 
-class AsyncRuntime:
+class AsyncRuntime(BaseRuntime):
     def __init__(self, node_id: int, config: Config, storage_factory):
         storage = storage_factory(node_id, config)
         self.debug = config.debug

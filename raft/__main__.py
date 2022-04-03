@@ -34,7 +34,9 @@ def get_storage_class(runtime, storage_class):
 
 def get_runtime(runtime):
     """Ensures a valid runtime arg has been passed"""
-    if not hasattr(runtimes, runtime):
+    if issubclass(runtime, runtimes.base.BaseRuntime):
+        return runtime
+    elif not hasattr(runtimes, runtime):
         raise ValueError(f"Invalid runtime class: {runtime}")
     return getattr(runtimes, runtime)
 

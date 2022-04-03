@@ -8,11 +8,13 @@ from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
 from raft.models.helpers import Clock, Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
+from .base import BaseEventController, BaseRuntime
+
 
 logger = logging.getLogger("raft")
 
 
-class ThreadedEventController:
+class ThreadedEventController(BaseEventController):
     """The job of this class is to package up 'things that happen'
     into events (see `Event`). The msg queue goes to lower-level socket-listeners.
 
@@ -174,7 +176,7 @@ class ThreadedEventController:
             self.election_timer.stop()
 
 
-class ThreadedRuntime:
+class ThreadedRuntime(BaseRuntime):
     def __init__(self, node_id: int, config: Config, storage_factory):
         storage = storage_factory(node_id, config)
         self.debug = config.debug
