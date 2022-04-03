@@ -24,9 +24,16 @@ from collections import namedtuple
 from typing import Generic, List, Optional, Set, Tuple, TypeVar, Union
 
 from raft.io import transport
-from raft.models import (EVENT_CONVERSION_TO_FOLLOWER,
-                         EVENT_CONVERSION_TO_LEADER, EVENT_HEARTBEAT,
-                         EVENT_SELF_WON_ELECTION, Event, EventType, log, rpc)
+from raft.models import (
+    EVENT_CONVERSION_TO_FOLLOWER,
+    EVENT_CONVERSION_TO_LEADER,
+    EVENT_HEARTBEAT,
+    EVENT_SELF_WON_ELECTION,
+    Event,
+    EventType,
+    log,
+    rpc,
+)
 from raft.models.helpers import Config
 
 logger = logging.getLogger(__name__)

@@ -11,14 +11,15 @@ from raft.models.server import LOG_FOLLOWER, LOG_LEADER, Follower, Server
 from .base import BaseEventController, BaseRuntime
 
 
-logger = logging.getLogger("raft")
+logger = logging.getLogger(__name__)
 
 
 class ThreadedEventController(BaseEventController):
     """The job of this class is to package up 'things that happen'
     into events (see `Event`). The msg queue goes to lower-level socket-listeners.
 
-    The `events` queue will be consumed by the runtime. _Some_ events have associated messages but not all.
+    The `events` queue will be consumed by the runtime.
+    _Some_ events have associated response messages but not all.
 
     For instance, an incoming RPC message is parsed and turned into an event.
 
