@@ -4,7 +4,8 @@ import threading
 
 from raft.io import loggers, transport
 from raft.models import EVENT_CONVERSION_TO_FOLLOWER, EVENT_START_HEARTBEAT, Event, EventType  # noqa
-from raft.models.helpers import Clock, Config
+from raft.models.clock import ThreadedClock
+from raft.models.config import Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import Follower, Leader, Server
 from .base import BaseEventController, BaseRuntime
@@ -151,7 +152,7 @@ class ThreadedEventController(BaseEventController):
         # self.stop_heartbeat()
         # Start Heartbeat timer (only leader should use this...)
         if self.heartbeat is None:
-            self.heartbeat = Clock(
+            self.heartbeat = ThreadedClock(
                 self.events,
                 interval=self.heartbeat_timeout_ms,
                 event_type=EventType.HeartbeatTime,
@@ -168,7 +169,7 @@ class ThreadedEventController(BaseEventController):
         # Start Election timer with new random interval
         # Followers and Candidates will use this
         if self.election_timer is None:
-            self.election_timer = Clock(
+            self.election_timer = ThreadedClock(
                 self.events,
                 interval_func=self.get_election_time,
                 event_type=EventType.ElectionTimeoutStartElection,

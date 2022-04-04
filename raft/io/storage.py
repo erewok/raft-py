@@ -4,7 +4,7 @@ import os
 import time
 from typing import Any, Dict, List
 
-from raft.models.helpers import Config
+from raft.models.config import Config
 
 
 logger = logging.getLogger("raft.io.storage")

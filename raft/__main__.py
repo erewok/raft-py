@@ -6,7 +6,7 @@ from raft import runtimes
 
 from .io import loggers  # noqa
 from .io import storage
-from .models.helpers import Config
+from .models.config import Config
 
 
 logger = logging.getLogger("raft")

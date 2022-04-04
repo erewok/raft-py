@@ -8,7 +8,7 @@ from raft.models import Event, EventType
 from raft.models import log
 from raft.models import rpc
 from raft.models import server
-from raft.models.helpers import Config
+from raft.models.config import Config
 from raft.runtimes.threaded import ThreadedRuntime, ThreadedEventController
 
 conf = configparser.ConfigParser()

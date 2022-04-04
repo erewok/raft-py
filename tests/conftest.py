@@ -4,7 +4,7 @@ import os
 import pytest
 
 from raft.io.storage import InMemoryStorage
-from raft.models.helpers import Config
+from raft.models.config import Config
 from raft.models import log
 from raft.models import rpc
 from raft.models import server

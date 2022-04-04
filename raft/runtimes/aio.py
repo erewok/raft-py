@@ -4,7 +4,8 @@ import queue
 from raft.io import loggers  # noqa
 from raft.io import transport
 from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
-from raft.models.helpers import Clock, Config
+from raft.models.config import Config
+from raft.models.clock import ThreadedClock
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import Follower, Server
 

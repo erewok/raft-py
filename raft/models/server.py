@@ -35,7 +35,7 @@ from raft.models import (
     log,
     rpc,
 )
-from raft.models.helpers import Config
+from raft.models.config import Config
 
 logger = logging.getLogger(__name__)
 # In some cases, we want to trigger _new_ events _from_ events
