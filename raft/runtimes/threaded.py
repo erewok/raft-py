@@ -5,13 +5,12 @@ import threading
 from raft.io import loggers, transport
 from raft.models import (
     EVENT_CONVERSION_TO_FOLLOWER,
-    EVENT_START_HEARTBEAT,
     Event,
     EventType,
-)  # noqa
+    parse_msg_to_event,
+)
 from raft.models.clock import ThreadedClock
 from raft.models.config import Config
-from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import Follower, Leader, Server
 from .base import BaseEventController, BaseRuntime
 
@@ -33,7 +32,8 @@ class ThreadedEventController(BaseEventController):
 
     It's sort of like MsgReceived-Q -> Events-Q -> Maybe Response-Q
 
-    Later on, someone may reply and we need to figure out what to do with those responses.
+    Later on, someone may reply and we need to figure out what to do
+    with those responses.
     """
 
     def __init__(self, node_id: int, config: Config, termination_sentinel=None):
@@ -71,28 +71,11 @@ class ThreadedEventController(BaseEventController):
 
     def client_msg_into_event(self, msg: bytes):
         """Inbound Message -> Events Queue"""
-        try:
-            result = parse_msg(msg)
-        except ValueError:
-            return None
+        event = parse_msg_to_event(msg)
+        if event is not None:
+            if event.type == EventType.DEBUG_REQUEST:
+                event.msg.source = self.address
 
-        event = None
-        if result.type == MsgType.AppendEntriesRequest:
-            event = Event(EventType.LeaderAppendLogEntryRpc, result)
-        elif result.type == MsgType.AppendEntriesResponse:
-            event = Event(EventType.AppendEntryConfirm, result)
-        elif result.type == MsgType.RequestVoteRequest:
-            event = Event(EventType.CandidateRequestVoteRpc, result)
-        elif result.type == MsgType.RequestVoteResponse:
-            event = Event(EventType.ReceiveServerCandidateVote, result)
-        elif result.type == MsgType.ClientRequest:
-            event = Event(EventType.ClientAppendRequest, result)
-        elif result.type == MsgType.DEBUG_MESSAGE and self.debug:
-            # # # DEBUG EVENT # # #
-            result.source = self.address
-            event = Event(EventType.DEBUG_REQUEST, result)
-
-        if event:
             self.events.put(event)
         return event
 
@@ -276,7 +259,7 @@ class ThreadedRuntime(BaseRuntime):
         )
         self.instance, (responses, more_events) = self.instance.handle_event(event)
         if responses:
-            logger.info(f"RaftNode Event OutboundMsg={len(responses)}")
+            logger.info(f"{self.log_name} Event OutboundMsg={len(responses)}")
         if more_events:
             logger.info(f"{self.log_name} Event FurtherEventCount={len(more_events)}")
         for response in responses:

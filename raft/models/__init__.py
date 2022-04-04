@@ -1,5 +1,7 @@
 import enum
-from typing import Any
+from typing import Any, Optional
+
+from .rpc import parse_msg, MsgType
 
 # Next == /\ \/ \E i \in Server : Restart(i)
 #            \/ \E i \in Server : Timeout(i)
@@ -59,3 +61,24 @@ EVENT_CONVERSION_TO_LEADER = Event(EventType.ConversionToLeader, None)
 EVENT_CONVERSION_TO_FOLLOWER = Event(EventType.ConversionToFollower, None)
 EVENT_HEARTBEAT = Event(EventType.HeartbeatTime, None)
 EVENT_START_HEARTBEAT = Event(EventType.StartHeartbeat, None)
+
+
+def parse_msg_to_event(msg: bytes) -> Optional[Event]:
+    try:
+        result = parse_msg(msg)
+    except ValueError:
+        return None
+    event = None
+    if result.type == MsgType.AppendEntriesRequest:
+        event = Event(EventType.LeaderAppendLogEntryRpc, result)
+    elif result.type == MsgType.AppendEntriesResponse:
+        event = Event(EventType.AppendEntryConfirm, result)
+    elif result.type == MsgType.RequestVoteRequest:
+        event = Event(EventType.CandidateRequestVoteRpc, result)
+    elif result.type == MsgType.RequestVoteResponse:
+        event = Event(EventType.ReceiveServerCandidateVote, result)
+    elif result.type == MsgType.ClientRequest:
+        event = Event(EventType.ClientAppendRequest, result)
+    elif result.type == MsgType.DEBUG_MESSAGE:
+        event = Event(EventType.DEBUG_REQUEST, result)
+    return event
