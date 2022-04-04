@@ -3,7 +3,12 @@ import queue
 import threading
 
 from raft.io import loggers, transport
-from raft.models import EVENT_CONVERSION_TO_FOLLOWER, EVENT_START_HEARTBEAT, Event, EventType  # noqa
+from raft.models import (
+    EVENT_CONVERSION_TO_FOLLOWER,
+    EVENT_START_HEARTBEAT,
+    Event,
+    EventType,
+)  # noqa
 from raft.models.clock import ThreadedClock
 from raft.models.config import Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
@@ -198,7 +203,7 @@ class ThreadedRuntime(BaseRuntime):
                 EventType.ResetElectionTimeout,
                 EventType.ConversionToFollower,
                 EventType.ConversionToLeader,
-                EventType.StartHeartbeat
+                EventType.StartHeartbeat,
             )
         )
 
@@ -212,7 +217,9 @@ class ThreadedRuntime(BaseRuntime):
         no_dump_keys = {"config", "transfer_attrs", "log"}
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
-            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name()}")
+            logger.info(
+                f"{self.log_name} is currently {self.instance.__class__.log_name()}"
+            )
             for key in filter(
                 lambda el: el not in no_dump_keys, self.instance.transfer_attrs
             ):
@@ -228,7 +235,9 @@ class ThreadedRuntime(BaseRuntime):
     def handle_start_heartbeat(self, _: Event):
         if self.debug:
             logger.info(f"{self.log_name} starting heartbeat")
-            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name()}")
+            logger.info(
+                f"{self.log_name} is currently {self.instance.__class__.log_name()}"
+            )
         self.event_controller.run_heartbeat()
 
     def runtime_handle_event(self, event):
@@ -269,9 +278,7 @@ class ThreadedRuntime(BaseRuntime):
         if responses:
             logger.info(f"RaftNode Event OutboundMsg={len(responses)}")
         if more_events:
-            logger.info(
-                f"{self.log_name} Event FurtherEventCount={len(more_events)}"
-            )
+            logger.info(f"{self.log_name} Event FurtherEventCount={len(more_events)}")
         for response in responses:
             self.event_controller.add_response_to_queue(response)
 

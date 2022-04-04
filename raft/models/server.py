@@ -104,9 +104,7 @@ class BaseServer(Generic[S]):
         self.storage.save(self.log[-1])
 
     def convert(self, target_class) -> S:
-        logger.warning(
-            f"Converting from {self._log_name} to {target_class.log_name()}"
-        )
+        logger.warning(f"Converting from {self._log_name} to {target_class.log_name()}")
         self.validate_conversion(target_class)
         new_server = target_class(self.node_id, self.config, self.storage)
         for attr in new_server.transfer_attrs:
@@ -133,6 +131,7 @@ class Candidate(BaseServer, Generic[S]):
 
     Each _new_ Candidate will _increment_ the `current_term`
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # node_ids get appended here if they vote for us
@@ -207,7 +206,12 @@ class Candidate(BaseServer, Generic[S]):
         if event.type == EventType.SelfWinElection:
             logger.info(f"{self._log_name} has won the election")
             leader = self.convert(Leader)
-            return leader, ResponsesEvents([], [EVENT_CONVERSION_TO_LEADER, EVENT_START_HEARTBEAT])
+            return (
+                leader,
+                ResponsesEvents(
+                    [], [EVENT_CONVERSION_TO_LEADER, EVENT_START_HEARTBEAT]
+                ),
+            )
         if event.type == EventType.ReceiveServerCandidateVote:
             responses_events = self.handle_vote_response(event)
         return self, responses_events
@@ -234,6 +238,7 @@ class Follower(BaseServer, Generic[S]):
 
     A Follower can become a Candidate.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.known_leader_node_id = None
@@ -290,7 +295,9 @@ class Follower(BaseServer, Generic[S]):
             source=event.msg.dest,
         )
 
-        logger.info(f"{self._log_name} Append entries request was successful: {success}")
+        logger.info(
+            f"{self._log_name} Append entries request was successful: {success}"
+        )
 
         return ResponsesEvents([msg], [Event(EventType.ResetElectionTimeout, None)])
 
@@ -380,6 +387,7 @@ class Leader(BaseServer, Generic[S]):
     """
     A Leader can become a Follower.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # volatile (from the raft paper)
@@ -439,7 +447,9 @@ class Leader(BaseServer, Generic[S]):
                     logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
         else:
-            logger.warning(f"{self._log_name} Append entries Failed for node: {node_id}")
+            logger.warning(
+                f"{self._log_name} Append entries Failed for node: {node_id}"
+            )
             self.next_index[node_id] = self.next_index[node_id] - 1
         return empty_response()
 
