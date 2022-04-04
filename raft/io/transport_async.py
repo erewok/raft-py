@@ -1,27 +1,21 @@
 from functools import partial
 import logging
 import traceback
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from raft.internal import trio
-from raft.io import loggers
+from raft.io import (
+    DEFAULT_MSG_LEN,
+    DEFAULT_REQUEST_TIMEOUT,
+    HEADER_LEN,
+    CLIENT_LOG_NAME,
+    SERVER_LOG_NAME,
+    Address,
+    MsgResponse,
+    Request,
+)
 
-
-HEADER_LEN = 10
-DEFAULT_MSG_LEN = 4096
-DEFAULT_REQUEST_TIMEOUT = 10  # SECONDS
-LISTENER_SERVER_CLIENT_TTL = 120  # 2 minutes
-Address = Tuple[str, int]
-MsgResponse = Optional[bytes]
 logger = logging.getLogger(__name__)
-Request = Tuple[Address, bytes]
-SHUTDOWN_CMD = b"SHUTDOWN"
-SERVER_LOG_NAME = "SocketServer"
-if loggers.RICH_HANDLING_ON:
-    SERVER_LOG_NAME = "[bold cyan]SocketServer[/]"
-CLIENT_LOG_NAME = "SocketClient"
-if loggers.RICH_HANDLING_ON:
-    CLIENT_LOG_NAME = "[bold blue]SocketClient[/]"
 
 
 async def send_message(stream: trio.abc.SendStream, msg: bytes):

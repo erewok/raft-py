@@ -3,18 +3,22 @@ import logging
 import traceback
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
 from threading import Event
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+from raft.io import (
+    DEFAULT_MSG_LEN,
+    DEFAULT_REQUEST_TIMEOUT,
+    HEADER_LEN,
+    CLIENT_LOG_NAME,
+    SERVER_LOG_NAME,
+    SHUTDOWN_CMD,
+    Address,
+    MsgResponse,
+    Request,
+)
 
 
-HEADER_LEN = 10
-DEFAULT_MSG_LEN = 4096
-DEFAULT_REQUEST_TIMEOUT = 10
-LISTENER_SERVER_CLIENT_TTL = 120  # 2 minutes
-Address = Tuple[str, int]
-MsgResponse = Optional[bytes]
 logger = logging.getLogger(__name__)
-Request = Tuple[Address, bytes]
-SHUTDOWN_CMD = b"SHUTDOWN"
 
 
 def send_message(sock, msg: bytes):
@@ -68,7 +72,7 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen()
-        logger.info(f"---Server Start: listening at {address[0]}:{address[1]}---")
+        logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
         while True:
             if listen_server_event and listen_server_event.is_set():
                 break
@@ -77,7 +81,7 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
             if result == SHUTDOWN_CMD and addr == address:
                 # received shutdown message from this host
                 break
-    logger.info(f"---Server Stop: Listening at {address[0]}:{address[1]}---")
+    logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
 def client_send_msg(
@@ -94,7 +98,7 @@ def client_send_msg(
             if response == b"ok":
                 return response
         except OSError:
-            logger.error(f"---Client Send FAIL {address[0]}:{address[1]}---")
+            logger.error(f"{CLIENT_LOG_NAME} Send FAIL {address[0]}:{address[1]}")
         return None
 
 
@@ -112,7 +116,7 @@ def broadcast_requests(
             try:
                 results_by_addr[addr] = future.result()
             except Exception:
-                logger.error(f"Failed reaching socket address: {addr[0]}:{addr[1]}")
+                logger.error(f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}")
                 logger.error(traceback.format_exc())
                 results_by_addr[addr] = None
     return results_by_addr
