@@ -46,20 +46,20 @@ async def receive_message(stream: trio.abc.ReceiveStream):
 
 async def handle_socket_client(send_channel: trio.abc.SendChannel, server_stream):
     try:
-        async with send_channel:
-            msg = await receive_message(server_stream)
-            if msg is not None:
-                await send_channel.send(msg)
-                await server_stream.send_all(b"ok")
+        msg = await receive_message(server_stream)
+        if msg is not None:
+            await send_channel.send(msg)
+            await server_stream.send_all(b"ok")
     except Exception:
         logger.error(traceback.format_exc())
 
 
 async def listen_server(address, send_channel: trio.abc.SendChannel):
-    handler = partial(handle_socket_client, send_channel)
-    logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
-    await trio.serve_tcp(handler, address[1])
-    logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
+    async with send_channel:
+        handler = partial(handle_socket_client, send_channel)
+        logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
+        await trio.serve_tcp(handler, address[1])
+        logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
 async def client_recv_msg(client_stream):
