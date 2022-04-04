@@ -48,8 +48,8 @@ async def handle_socket_client(send_channel: trio.abc.SendChannel, server_stream
     try:
         msg = await receive_message(server_stream)
         if msg is not None:
+            await send_message(server_stream, b"ok")
             await send_channel.send(msg)
-            await server_stream.send_all(b"ok")
     except Exception:
         logger.error(traceback.format_exc())
 
@@ -97,7 +97,7 @@ async def broadcast_requests(
         async with results_tx, results_rx:
             for (address, msg) in address_msgs:
                 nursery.start_soon(
-                    sender_with_timeout, nursery, address, msg, results_tx.clone()
+                    sender_with_timeout, nursery, address, msg, results_tx
                 )
             results_by_addr = await client_send_success_reporter(results_rx)
     return results_by_addr
