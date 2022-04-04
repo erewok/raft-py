@@ -1,11 +1,10 @@
 import concurrent.futures
 import logging
 import traceback
-
-# import queue
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
 from threading import Event
 from typing import Dict, List, Optional, Tuple
+
 
 HEADER_LEN = 10
 DEFAULT_MSG_LEN = 4096
@@ -46,24 +45,6 @@ def receive_message(sock):
 def send_and_receive(sock: socket, msg: bytes):
     send_message(sock, msg)
     return receive_message(sock)
-
-
-# class MessageProtocol:
-#     """Dave's Size-prefixed messaging class"""
-
-#     def __init__(self):
-#         self.buffer = bytearray()
-
-#     def encode_messsage(self, msg):
-#         return b"%10d" % len(msg) + msg
-
-#     def decode_messages(self, data):
-#         self.buffer.extend(data)
-#         while len(self.buffer) >= 10:
-#             size = int(self.buffer[:10])
-#             if len(self.buffer) >= 10 + size:
-#                 yield bytes(self.buffer[10 : 10 + size])
-#             del self.buffer[: 10 + size]
 
 
 def handle_socket_client(client, addr, msg_queue):

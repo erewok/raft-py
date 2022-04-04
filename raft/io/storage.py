@@ -1,20 +1,14 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import logging
 import os
 import time
 from typing import Any, Dict, List
 
+from raft.internal import trio
 from raft.models.config import Config
 
 
 logger = logging.getLogger("raft.io.storage")
-
-
-try:
-    import trio
-except ImportError:
-    logger.info("Missing async features: install with `async` to enable")
-    trio = None
 
 
 class BaseStorage:

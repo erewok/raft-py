@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 # In some cases, we want to trigger _new_ events _from_ events
 # We may also want to issue _responses_.
 # We need to disambiguate these.
-ResponsesEvents = namedtuple("ResponsesEvents", ("responses", "events"))
+ResponsesEvents: Tuple[List[rpc.RPCMessage], List[Event]] = namedtuple(
+    "ResponsesEvents", ("responses", "events")
+)
 S = TypeVar("S", bound="BaseServer")
 # This is defined at the bottom
 # Server = Union[Leader[S], Candidate[S], Follower[S]]

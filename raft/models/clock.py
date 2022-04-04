@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ThreadedClock:
     """
-    A Clock implementation which can be used for any internal Raft
+    A Clock implementation can be used for any internal Raft
     clock, such as an election-timeout or heartbeat timer (from the Leader).
 
     It accepts an `interval_func` or a discrete `interval`, the idea
@@ -63,7 +63,7 @@ class ThreadedClock:
 
 class AsyncClock:
     """
-    A AsyncClock implementation which can be used for any internal Raft
+    An AsyncClock implementation can be used for any internal Raft
     clock, such as an election-timeout or heartbeat timer (from the Leader).
 
     It accepts an `interval_func` or a discrete `interval`, the idea
@@ -75,7 +75,7 @@ class AsyncClock:
     """
     def __init__(
         self,
-        event_queue: trio.abc.SendChannel,
+        send_channel: trio.abc.SendChannel,
         interval: float = 1.0,
         interval_func: Callable[[], float] = None,
         event_type: EventType = EventType.Tick,
@@ -83,16 +83,16 @@ class AsyncClock:
         self.command = None
         self.interval = interval
         self.interval_func = interval_func
-        self.event_queue = event_queue
+        self.send_channel = send_channel
         self.event_type = event_type
         self._log_name = f"[Clock - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
             self._log_name = f"[[yellow]Clock[/] - [blue]{str(self.event_type)}[/]]"
 
     async def start(self):
-        await self.generate_ticks(self.event_queue)
+        await self.generate_ticks(self.send_channel)
 
-    async def generate_ticks(self, event_q):
+    async def generate_ticks(self, send_channel):
         interval = self.interval_func() if self.interval_func else self.interval
 
         while True:
@@ -101,8 +101,8 @@ class AsyncClock:
 
             await trio.sleep(interval)
             logger.debug(f"{self._log_name}")
-            async with event_q:
-                await event_q.send(Event(self.event_type, None))
+            async with send_channel:
+                await send_channel.send(Event(self.event_type, None))
 
     async def stop(self):
         logger.info(f"{self._log_name} is shutting down")
