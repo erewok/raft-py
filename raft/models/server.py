@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import namedtuple
-from typing import Generic, List, Optional, Set, Tuple, TypeVar, Union
+from typing import Generic, List, Set, Tuple, TypeVar, Union
 
 from raft.io import loggers, transport
 from raft.models import (
@@ -29,6 +29,7 @@ from raft.models import (
     EVENT_CONVERSION_TO_LEADER,
     EVENT_HEARTBEAT,
     EVENT_SELF_WON_ELECTION,
+    EVENT_START_HEARTBEAT,
     Event,
     EventType,
     log,
@@ -38,8 +39,8 @@ from raft.models.helpers import Config
 
 logger = logging.getLogger(__name__)
 # In some cases, we want to trigger _new_ events _from_ events
-# We may also want to issue _responses_. We need to disambiguate these
-# Either `responses` or `events` may be None
+# We may also want to issue _responses_.
+# We need to disambiguate these.
 ResponsesEvents = namedtuple("ResponsesEvents", ("responses", "events"))
 S = TypeVar("S", bound="BaseServer")
 # This is defined at the bottom
@@ -85,11 +86,10 @@ class BaseServer(Generic[S]):
             "current_term",
             "log",
         )
-        self._log_name = "Server"
 
-    @property
-    def log_name(self):
-        return self._log_name
+    @classmethod
+    def log_name(cls):
+        return "Server"
 
     @property
     def address(self):
@@ -105,7 +105,7 @@ class BaseServer(Generic[S]):
 
     def convert(self, target_class) -> S:
         logger.warning(
-            f"Converting Server class from {self.__class__} to {str(target_class)}"
+            f"Converting from {self._log_name} to {target_class.log_name()}"
         )
         self.validate_conversion(target_class)
         new_server = target_class(self.node_id, self.config, self.storage)
@@ -133,14 +133,17 @@ class Candidate(BaseServer, Generic[S]):
 
     Each _new_ Candidate will _increment_ the `current_term`
     """
-    log_name = "Candidate"
-    if loggers.RICH_HANDLING_ON:
-        log_name = "[bold yellow]Candidate[/]"
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # node_ids get appended here if they vote for us
         self.votes_received: Set[int] = set((self.node_id,))
+        self._log_name = self.log_name()
+
+    @classmethod
+    def log_name(cls):
+        if loggers.RICH_HANDLING_ON:
+            return "[bold yellow]Candidate[/]"
+        return "Candidate"
 
     def increment_term(self):
         self.current_term += 1
@@ -204,7 +207,7 @@ class Candidate(BaseServer, Generic[S]):
         if event.type == EventType.SelfWinElection:
             logger.info(f"{self._log_name} has won the election")
             leader = self.convert(Leader)
-            return leader, ResponsesEvents([], [EVENT_CONVERSION_TO_LEADER])
+            return leader, ResponsesEvents([], [EVENT_CONVERSION_TO_LEADER, EVENT_START_HEARTBEAT])
         if event.type == EventType.ReceiveServerCandidateVote:
             responses_events = self.handle_vote_response(event)
         return self, responses_events
@@ -231,13 +234,16 @@ class Follower(BaseServer, Generic[S]):
 
     A Follower can become a Candidate.
     """
-    log_name = "Follower"
-    if loggers.RICH_HANDLING_ON:
-        log_name = "[bold green]Follower[/]"
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.known_leader_node_id = None
+        self._log_name = self.log_name()
+
+    @classmethod
+    def log_name(cls):
+        if loggers.RICH_HANDLING_ON:
+            return "[bold green]Follower[/]"
+        return "Follower"
 
     def handle_append_entries_message(self, event: Event) -> ResponsesEvents:
         # An RPC sent by leader to replicate log entries (see Raft §5.3)
@@ -374,10 +380,6 @@ class Leader(BaseServer, Generic[S]):
     """
     A Leader can become a Follower.
     """
-    log_name = "Leader"
-    if loggers.RICH_HANDLING_ON:
-        log_name = "[bold red]Leader[/]"
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # volatile (from the raft paper)
@@ -385,6 +387,13 @@ class Leader(BaseServer, Generic[S]):
         self.match_index = {k: 0 for k in self.all_node_ids}
         # implementation specific
         self.consensus_threshold = (len(self.all_node_ids) // 2) + 1
+        self._log_name = self.log_name()
+
+    @classmethod
+    def log_name(cls):
+        if loggers.RICH_HANDLING_ON:
+            return "[bold red]Leader[/]"
+        return "Leader"
 
     def handle_client_append_request(self, event: Event):
         entry = log.LogEntry(self.current_term, event.msg.command)
@@ -406,7 +415,7 @@ class Leader(BaseServer, Generic[S]):
         node_id = event.msg.source_node_id
         if event.msg.success:
             logger.info(
-                f"{self.log_name} Append entries request was successful for node: {node_id}"
+                f"{self._log_name} Append entries request was successful for node: {node_id}"
             )
             self.match_index[node_id] = max(
                 event.msg.match_index, self.match_index[node_id]
@@ -419,7 +428,7 @@ class Leader(BaseServer, Generic[S]):
             if num_committed > self.commit_index:
                 self.commit_index = num_committed
                 logger.info(
-                    f"{self.log_name} Committed entries count is now {self.commit_index}"
+                    f"{self._log_name} Committed entries count is now {self.commit_index}"
                 )
                 # Here is where committed log entries would be "applied" to the application.
                 if self.commit_index > self.last_applied:
@@ -427,10 +436,10 @@ class Leader(BaseServer, Generic[S]):
                         self.last_applied + 1 : self.commit_index + 1
                     ]
                     self.applied.extend(entries)
-                    logger.info(f"{self.log_name} AppliedEntries={entries}")
+                    logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
         else:
-            logger.warning(f"{self.log_name} Append entries Failed for node: {node_id}")
+            logger.warning(f"{self._log_name} Append entries Failed for node: {node_id}")
             self.next_index[node_id] = self.next_index[node_id] - 1
         return empty_response()
 
@@ -473,7 +482,7 @@ class Leader(BaseServer, Generic[S]):
         event_term = event.msg.term if event.msg and hasattr(event.msg, "term") else -1
         logger.info(
             (
-                f"{self.log_name} Received Event with msg type "
+                f"{self._log_name} Received Event with msg type "
                 f"{event_msg_type} and term {event_term}"
             )
         )
@@ -481,7 +490,7 @@ class Leader(BaseServer, Generic[S]):
             # According to the paper, the server immediately steps down in this case
             logger.warning(
                 (
-                    f"{self.log_name} with term *{self.current_term}* is stepping down "
+                    f"{self._log_name} with term *{self.current_term}* is stepping down "
                     f"after message with term *{event_term}* received"
                 )
             )
@@ -502,7 +511,7 @@ class Leader(BaseServer, Generic[S]):
     def validate_conversion(self, target_class):
         if target_class == Follower:
             return True
-        raise ValueError(f"{self.log_name} Can only convert leader into a Follower")
+        raise ValueError(f"{self._log_name} Can only convert Leader into a Follower")
 
 
 Server = Union[Leader[S], Candidate[S], Follower[S]]

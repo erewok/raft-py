@@ -31,6 +31,7 @@ class EventType(enum.IntEnum):
     ConversionToLeader = 15
     ConversionToFollower = 16
 
+    StartHeartbeat = 25
     DEBUG_REQUEST = 99
 
     def __str__(self):
@@ -57,3 +58,4 @@ EVENT_SELF_WON_ELECTION = Event(EventType.SelfWinElection, None)
 EVENT_CONVERSION_TO_LEADER = Event(EventType.ConversionToLeader, None)
 EVENT_CONVERSION_TO_FOLLOWER = Event(EventType.ConversionToFollower, None)
 EVENT_HEARTBEAT = Event(EventType.HeartbeatTime, None)
+EVENT_START_HEARTBEAT = Event(EventType.StartHeartbeat, None)

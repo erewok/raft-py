@@ -3,7 +3,7 @@ import queue
 import threading
 
 from raft.io import loggers, transport
-from raft.models import EVENT_CONVERSION_TO_FOLLOWER, Event, EventType  # noqa
+from raft.models import EVENT_CONVERSION_TO_FOLLOWER, EVENT_START_HEARTBEAT, Event, EventType  # noqa
 from raft.models.helpers import Clock, Config
 from raft.models.rpc import MsgType, RpcBase, parse_msg  # noqa
 from raft.models.server import Follower, Leader, Server
@@ -197,20 +197,21 @@ class ThreadedRuntime(BaseRuntime):
                 EventType.ResetElectionTimeout,
                 EventType.ConversionToFollower,
                 EventType.ConversionToLeader,
+                EventType.StartHeartbeat
             )
         )
 
     @property
     def log_name(self):
         if loggers.RICH_HANDLING_ON:
-            return f"[[green]Runtime[/] - {self.instance.log_name}]"
-        return f"[Runtime - {self.instance.log_name}]"
+            return f"[[green]Runtime[/] - {self.instance.log_name()}]"
+        return f"[Runtime - {self.instance.log_name()}]"
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
-            logger.info(f"{self.log_name} is currently {self.instance.__class__}")
+            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name()}")
             for key in filter(
                 lambda el: el not in no_dump_keys, self.instance.transfer_attrs
             ):
@@ -226,7 +227,7 @@ class ThreadedRuntime(BaseRuntime):
     def handle_start_heartbeat(self, _: Event):
         if self.debug:
             logger.info(f"{self.log_name} starting heartbeat")
-            logger.info(f"{self.log_name} is currently {self.instance.__class__}")
+            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name()}")
         self.event_controller.run_heartbeat()
 
     def runtime_handle_event(self, event):
@@ -236,10 +237,12 @@ class ThreadedRuntime(BaseRuntime):
         elif event.type == EventType.ResetElectionTimeout:
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
-            logger.info(f"{self.log_name} Converting to {Follower.log_name}")
+            logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
-            logger.info(f"{self.log_name} Converting to {Leader.log_name}")
+            logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+        elif event.type == EventType.StartHeartbeat:
+            self.handle_start_heartbeat(event)
 
     def drop_event(self, event):
         if event.type == EventType.HeartbeatTime and isinstance(
@@ -308,7 +311,6 @@ class ThreadedRuntime(BaseRuntime):
 
         # Trigger event that makes it so that the correct timers start/stop
         self.event_controller.run()
-        self.event_controller.run_heartbeat()
         self.event_controller.events.put(EVENT_CONVERSION_TO_FOLLOWER)
 
         if foreground:
