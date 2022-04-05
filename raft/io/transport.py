@@ -21,6 +21,9 @@ from raft.io import (
 logger = logging.getLogger(__name__)
 
 
+# # # # # # # # # # # # # # # # #
+# Message Protocol functions
+# # # # # # # # # # # # # # # # #
 def send_message(sock, msg: bytes):
     size = b"%10d" % len(msg)  # Make a 10-byte length field
     sock.sendall(size)
@@ -51,6 +54,9 @@ def send_and_receive(sock: socket, msg: bytes):
     return receive_message(sock)
 
 
+# # # # # # # # # # # # # # # # #
+# Socket Server functions
+# # # # # # # # # # # # # # # # #
 def handle_socket_client(client, addr, msg_queue):
     msg = None
     try:
@@ -84,6 +90,9 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
     logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
+# # # # # # # # # # # # # # # # #
+# Socket Client functions
+# # # # # # # # # # # # # # # # #
 def client_send_msg(
     address: Address, msg: bytes, timeout: int = DEFAULT_REQUEST_TIMEOUT
 ) -> Optional[bytes]:

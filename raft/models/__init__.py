@@ -48,6 +48,12 @@ class Event:
         self.type = etype
         self.msg = msg
 
+    def __eq__(self, other):
+        return self.type == other.type and self.msg == other.msg
+
+    def __str__(self):
+        return f"[{self.type}] {self.msg}"
+
 
 # # # # # # # # # # # # # # # # # #
 # Static/Constant Events          #

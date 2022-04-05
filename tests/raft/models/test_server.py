@@ -1,6 +1,7 @@
 from __future__ import nested_scopes
 import pytest
 
+from raft import models
 from raft.models import Event, EventType
 from raft.models import rpc
 from raft.models import server
@@ -123,20 +124,35 @@ def test_follower_msg_append(
 
 # Testing Candidate conversions
 @pytest.mark.parametrize(
-    "etype,new_class",
+    "etype,new_class,events",
     (
-        (EventType.SelfWinElection, server.Leader),
-        (EventType.LeaderAppendLogEntryRpc, server.Follower),
-        (EventType.Tick, None),
+        (
+            EventType.SelfWinElection,
+            server.Leader,
+            [models.EVENT_CONVERSION_TO_LEADER, models.EVENT_START_HEARTBEAT],
+        ),
+        (
+            EventType.LeaderAppendLogEntryRpc,
+            server.Follower,
+            [models.EVENT_CONVERSION_TO_FOLLOWER],
+        ),
+        (EventType.Tick, None, []),
     ),
 )
-def test_follower_candidate_convert(etype, new_class, candidate):
+def test_follower_candidate_convert(etype, new_class, events, candidate):
     event = Event(etype, None)
     inst, resps = candidate.handle_event(event)
-    assert is_empty_response(resps)
+    if etype == EventType.Tick:
+        assert is_empty_response(resps)
+    else:
+        assert not is_empty_response(resps)
+        for left, right in zip(events, resps.events):
+            assert left == right
+
     if new_class is None:
         assert inst == candidate
-        return
+        return None  # Further tests below are about conversion
+
     assert isinstance(inst, new_class)
     assert id(inst) != id(candidate)
     if isinstance(inst, server.Candidate):
@@ -270,7 +286,9 @@ def test_leader_handle_event(leader, sample_append_confirm_rpc):
     event.msg.term = 100
     inst2, maybe_resp_evs = leader.handle_event(event)
     assert inst2 is not leader
-    assert is_empty_response(maybe_resp_evs)
+    assert not is_empty_response(maybe_resp_evs)
+    assert len(maybe_resp_evs.events) == 1
+    assert maybe_resp_evs.events[0] == models.EVENT_CONVERSION_TO_FOLLOWER
     assert isinstance(inst2, server.Follower)
 
 

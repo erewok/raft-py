@@ -18,6 +18,9 @@ from raft.io import (
 logger = logging.getLogger(__name__)
 
 
+# # # # # # # # # # # # # # # # #
+# Message Protocol functions
+# # # # # # # # # # # # # # # # #
 async def send_message(stream: trio.abc.SendStream, msg: bytes):
     size = b"%10d" % len(msg)  # Make a 10-byte length field
     await stream.send_all(size)
@@ -46,6 +49,9 @@ async def receive_message(stream: trio.abc.ReceiveStream):
     return b"".join(chunks)
 
 
+# # # # # # # # # # # # # # # # #
+# Socket Server functions
+# # # # # # # # # # # # # # # # #
 async def handle_socket_client(send_channel: trio.abc.SendChannel, server_stream):
     try:
         msg = await receive_message(server_stream)
@@ -88,7 +94,7 @@ async def client_send_msg(
         async with client_stream:
             nursery.start_soon(send_message, client_stream, msg)
             result = await receive_message(client_stream)
-            await result_chan.send(result)
+            await result_chan.send((address, result))
 
 
 async def client_send_success_reporter(
@@ -96,7 +102,9 @@ async def client_send_success_reporter(
 ) -> Dict[Address, MsgResponse]:
     results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
     async with read_chan:
-        pass
+        async for (address, resp) in read_chan:
+            results_by_addr[address] = resp
+    return results_by_addr
 
 
 async def broadcast_requests(

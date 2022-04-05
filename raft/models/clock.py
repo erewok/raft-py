@@ -18,7 +18,7 @@ class ThreadedClock:
 
     It accepts an `interval_func` or a discrete `interval`, the idea
     being that with an election timeout, we'd like to have a randomized
-    interval.
+    interval and a function can compute a new random timeout anew each time.
 
     It uses a `threading.Event` to know when to stop ticking,
     and an `queue.Queue` to send all of its ticks to.
@@ -69,10 +69,9 @@ class AsyncClock:
 
     It accepts an `interval_func` or a discrete `interval`, the idea
     being that with an election timeout, we'd like to have a randomized
-    interval.
+    interval and a function can compute a new random timeout anew each time.
 
-    This clock implementation expect a `trio.SendChannel`
-    to send events to.
+    This clock implementation expect a `trio.SendChannel` to send events to.
     """
 
     def __init__(
@@ -97,13 +96,13 @@ class AsyncClock:
     async def generate_ticks(self, send_channel):
         interval = self.interval_func() if self.interval_func else self.interval
 
-        while True:
-            if self.command is not None:
-                return None
+        async with send_channel:
+            while True:
+                if self.command is not None:
+                    return None
 
-            await trio.sleep(interval)
-            logger.debug(f"{self._log_name}")
-            async with send_channel:
+                await trio.sleep(interval)
+                logger.debug(f"{self._log_name}")
                 await send_channel.send(Event(self.event_type, None))
 
     async def stop(self):
