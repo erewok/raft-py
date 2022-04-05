@@ -74,17 +74,17 @@ def parse_msg_to_event(msg: bytes) -> Optional[Event]:
         result = parse_msg(msg)
     except ValueError:
         return None
-    event = None
+
     if result.type == MsgType.AppendEntriesRequest:
-        event = Event(EventType.LeaderAppendLogEntryRpc, result)
+        return Event(EventType.LeaderAppendLogEntryRpc, result)
     elif result.type == MsgType.AppendEntriesResponse:
-        event = Event(EventType.AppendEntryConfirm, result)
+        return Event(EventType.AppendEntryConfirm, result)
     elif result.type == MsgType.RequestVoteRequest:
-        event = Event(EventType.CandidateRequestVoteRpc, result)
+        return Event(EventType.CandidateRequestVoteRpc, result)
     elif result.type == MsgType.RequestVoteResponse:
-        event = Event(EventType.ReceiveServerCandidateVote, result)
+        return Event(EventType.ReceiveServerCandidateVote, result)
     elif result.type == MsgType.ClientRequest:
-        event = Event(EventType.ClientAppendRequest, result)
+        return Event(EventType.ClientAppendRequest, result)
     elif result.type == MsgType.DEBUG_MESSAGE:
-        event = Event(EventType.DEBUG_REQUEST, result)
-    return event
+        return Event(EventType.DEBUG_REQUEST, result)
+    return None

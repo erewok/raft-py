@@ -3,13 +3,6 @@ import logging
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
-formatter = logging.Formatter(
-    "[%(levelname)s] %(asctime)s >> %(message)s", "%Y-%m-%d %H:%M:%S"
-)
-log_handler = logging.StreamHandler()
-log_handler.setLevel(logging.INFO)
-log_handler.setFormatter(formatter)
-logger.addHandler(log_handler)
 
 
 @enum.unique
