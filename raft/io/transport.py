@@ -116,7 +116,9 @@ def broadcast_requests(
             try:
                 results_by_addr[addr] = future.result()
             except Exception:
-                logger.error(f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}")
+                logger.error(
+                    f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}"
+                )
                 logger.error(traceback.format_exc())
                 results_by_addr[addr] = None
     return results_by_addr

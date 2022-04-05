@@ -2,6 +2,7 @@ import logging.config
 
 try:
     from rich.logging import RichHandler
+
     RICH_HANDLING_ON = True
 except ImportError:
     RICH_HANDLING_ON = False

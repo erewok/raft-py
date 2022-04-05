@@ -36,7 +36,9 @@ async def receive_message(stream: trio.abc.ReceiveStream):
         return None
 
     while bytes_recd < msg_len:
-        chunk = await stream.receive_some(max_bytes=min(msg_len - bytes_recd, DEFAULT_MSG_LEN))
+        chunk = await stream.receive_some(
+            max_bytes=min(msg_len - bytes_recd, DEFAULT_MSG_LEN)
+        )
         if chunk == b"":
             raise RuntimeError("Socket connection broken")
         chunks.append(chunk)
@@ -62,6 +64,9 @@ async def listen_server(address, send_channel: trio.abc.SendChannel):
         logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
+# # # # # # # # # # # # # # # # #
+# Socket Client functions
+# # # # # # # # # # # # # # # # #
 async def client_recv_msg(client_stream):
     logger.debug(f"{CLIENT_LOG_NAME} receiving")
     total = b""
@@ -71,17 +76,24 @@ async def client_recv_msg(client_stream):
 
 
 async def client_send_msg(
-    address: Address, msg: bytes, result_chan: trio.abc.SendChannel, timeout: int = DEFAULT_REQUEST_TIMEOUT
+    nursery,
+    address: Address,
+    msg: bytes,
+    result_chan: trio.abc.SendChannel,
+    timeout: int = DEFAULT_REQUEST_TIMEOUT,
 ) -> Optional[bytes]:
     logger.debug(f"{CLIENT_LOG_NAME} connecting to {address[0]}:{address[1]}")
     with trio.move_on_after(timeout):
         client_stream = await trio.open_tcp_stream(address[0], address[1])
         async with client_stream:
-            await send_message(client_stream, msg)
-            await result_chan.send(msg)
+            nursery.start_soon(send_message, client_stream, msg)
+            result = await receive_message(client_stream)
+            await result_chan.send(result)
 
 
-async def client_send_success_reporter(read_chan: trio.abc.ReceiveChannel) -> Dict[Address, MsgResponse]:
+async def client_send_success_reporter(
+    read_chan: trio.abc.ReceiveChannel,
+) -> Dict[Address, MsgResponse]:
     results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
     async with read_chan:
         pass
@@ -97,7 +109,7 @@ async def broadcast_requests(
         async with results_tx, results_rx:
             for (address, msg) in address_msgs:
                 nursery.start_soon(
-                    sender_with_timeout, nursery, address, msg, results_tx
+                    sender_with_timeout, nursery, address, msg, results_tx.clone()
                 )
             results_by_addr = await client_send_success_reporter(results_rx)
     return results_by_addr
@@ -105,17 +117,41 @@ async def broadcast_requests(
 
 if __name__ == "__main__":
     # Run a test socket server from this script
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--server", action="store_true")
+    parser.add_argument("-c", "--client", action="store_true")
+
+    ADDRESS = ("127.0.0.1", 5000)
 
     async def print_results(read_chan: trio.abc.ReceiveChannel):
         async with read_chan:
             async for msg in read_chan:
                 print(msg)
 
-    async def main():
+    async def client_test():
         async with trio.open_nursery() as nursery:
             results_tx, results_rx = trio.open_memory_channel(40)
             async with results_tx, results_rx:
-                nursery.start_soon(print_results, results_rx)
-                await listen_server(("127.0.0.1", 5000), results_tx)
+                nursery.start_soon(print_results, results_rx.clone())
+                for n in range(12):
+                    data = json.dumps({"test": n, "status": "ok"})
+                    await client_send_msg(
+                        nursery, ADDRESS, data.encode("utf-8"), results_tx
+                    )
 
-    trio.run(main)
+    async def server_test():
+        async with trio.open_nursery() as nursery:
+            results_tx, results_rx = trio.open_memory_channel(40)
+            async with results_tx, results_rx:
+                nursery.start_soon(print_results, results_rx.clone())
+                await listen_server(ADDRESS, results_tx)
+
+    args = parser.parse_args()
+
+    if args.server:
+        trio.run(server_test)
+    else:
+        trio.run(client_test)

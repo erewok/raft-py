@@ -23,6 +23,7 @@ class ThreadedClock:
     It uses a `threading.Event` to know when to stop ticking,
     and an `queue.Queue` to send all of its ticks to.
     """
+
     def __init__(
         self,
         event_queue: queue.Queue[EventType],
@@ -73,6 +74,7 @@ class AsyncClock:
     This clock implementation expect a `trio.SendChannel`
     to send events to.
     """
+
     def __init__(
         self,
         send_channel: trio.abc.SendChannel,
