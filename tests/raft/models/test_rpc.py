@@ -91,7 +91,11 @@ def test_parse_debug():
 
 def test_parse_client_request():
     msg = json.dumps(
-        {"type": rpc.MsgType.ClientRequest.value, "body": "GET a", "callback_addr": ["127.0.0.1", 9999]}
+        {
+            "type": rpc.MsgType.ClientRequest.value,
+            "body": "GET a",
+            "callback_addr": ["127.0.0.1", 9999],
+        }
     )
     result = rpc.parse_msg(msg)
     assert result.type is rpc.MsgType.ClientRequest
