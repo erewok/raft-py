@@ -27,7 +27,7 @@ class ThreadedClock:
     def __init__(
         self,
         event_queue: queue.Queue[EventType],
-        interval: float = 1.0,
+        interval: float = 1.0,  # seconds
         interval_func: Callable[[], float] = None,
         event_type: EventType = EventType.Tick,
     ):
@@ -77,15 +77,15 @@ class AsyncClock:
     def __init__(
         self,
         send_channel: trio.abc.SendChannel,
-        interval: float = 1.0,
+        interval: float = 1.0,  # seconds
         interval_func: Callable[[], float] = None,
         event_type: EventType = EventType.Tick,
     ):
-        self.command = None
         self.interval = interval
         self.interval_func = interval_func
         self.send_channel = send_channel
         self.event_type = event_type
+        self.command_event: trio.Event = trio.Event()
         self._log_name = f"[Clock - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
             self._log_name = f"[[yellow]Clock[/] - [blue]{str(self.event_type)}[/]]"
@@ -93,18 +93,14 @@ class AsyncClock:
     async def start(self):
         await self.generate_ticks(self.send_channel)
 
-    async def generate_ticks(self, send_channel):
+    async def generate_ticks(self, send_channel: trio.abc.SendChannel):
         interval = self.interval_func() if self.interval_func else self.interval
-
         async with send_channel:
-            while True:
-                if self.command is not None:
-                    return None
-
+            while not self.command_event.is_set():
                 await trio.sleep(interval)
-                logger.debug(f"{self._log_name}")
+                logger.debug(f"{self._log_name} tick")
                 await send_channel.send(Event(self.event_type, None))
 
-    async def stop(self):
+    def stop(self):
         logger.info(f"{self._log_name} is shutting down")
-        self.command = 1
+        self.command_event.set()
