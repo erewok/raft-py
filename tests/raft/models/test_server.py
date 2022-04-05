@@ -242,6 +242,36 @@ def test_follower_handle_request_vote_rpc(
     assert not results.events
 
 
+def test_handle_vote_response_greater_term(
+    candidate, follower, fig7_a_log, candidate_request_vote_event
+):
+    # First, we try it with a term that's < Candidate's term
+    candidate.current_term = 20
+    follower.log = fig7_a_log
+    follower.current_term = follower.log[-1].term
+    # Reusing logic from follower-request vote tests
+    event = candidate_request_vote_event(1, 8, ("127.0.0.1", 3112))
+    event.msg.last_log_index = len(follower.log) + 1
+    event.msg.last_log_term = follower.log[-1].term
+    follower.node_id = 2
+    responses, _ = follower.handle_request_vote_rpc(event)
+    # sanity check
+    assert responses
+    resp_event = Event(EventType.ReceiveServerCandidateVote, responses[0])
+    inst, responses = candidate.handle_event(resp_event)
+    assert is_empty_response(responses)
+    assert inst == candidate
+
+    # Now we try it again and turn the candidate's current_term down
+    # Calling handle-event with a reponse with greater term creates conversion
+    candidate.current_term = 1
+    inst, responses = candidate.handle_event(resp_event)
+    assert inst != candidate
+    assert not is_empty_response(responses)
+    assert isinstance(inst, server.Follower)
+    assert responses.events[0] == models.EVENT_CONVERSION_TO_FOLLOWER
+
+
 def test_handle_vote_response(
     candidate, follower, fig7_a_log, candidate_request_vote_event
 ):
