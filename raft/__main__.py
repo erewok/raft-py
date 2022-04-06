@@ -6,7 +6,8 @@ from raft import runtimes
 
 from .io import loggers  # noqa
 from .io import storage
-from .models.helpers import Config
+from .models.config import Config
+
 
 logger = logging.getLogger("raft")
 
@@ -34,11 +35,14 @@ def get_storage_class(runtime, storage_class):
 
 def get_runtime(runtime):
     """Ensures a valid runtime arg has been passed"""
-    if issubclass(runtime, runtimes.base.BaseRuntime):
-        return runtime
-    elif not hasattr(runtimes, runtime):
+    if isinstance(runtime, str) and hasattr(runtimes, runtime):
+        return getattr(runtimes, runtime)
+    elif isinstance(runtime, str) and not hasattr(runtimes, runtime):
         raise ValueError(f"Invalid runtime class: {runtime}")
-    return getattr(runtimes, runtime)
+    elif issubclass(runtime, runtimes.base.BaseRuntime):
+        return runtime
+
+    raise ValueError(f"Invalid runtime class: {runtime}")
 
 
 def main(node_id, config, runtime="ThreadedRuntime"):
@@ -50,8 +54,8 @@ def main(node_id, config, runtime="ThreadedRuntime"):
     try:
         node.run()
     except KeyboardInterrupt:
-        logger.warning("\x1b[31m*--- SHUTTING DOWN ---*\x1b[0m")
-        logger.warning("\x1b[31m*--- PLEASE WAIT FOR FULL STOP ---*\x1b[0m")
+        logger.warning("SHUTTING DOWN")
+        logger.warning("PLEASE WAIT FOR FULL STOP")
         node.stop()
     sys.exit(0)
 

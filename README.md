@@ -41,3 +41,21 @@ You can simultaneously run raft nodes in other terminals. If you have enough for
 ```
 
 To send requests into the cluster see the examples in [`shell.py`](./shell.py).
+
+## Design
+
+This codebase splits up the Raft protocol into a few important pieces
+
+- Socket Server (for receiving requests)
+- Runtime
+  - Event Controller
+  - Event Handler
+- Server
+- Storage
+- Clocks
+
+This diagram may help:
+
+![](./Raft-Design.png)
+
+The event controller and event handler use queues or channels to coordinate behavior between the socket server and the clocks that a Raft node may need to run.

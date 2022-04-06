@@ -30,7 +30,7 @@ def test_parse_append_entries():
     result = rpc.parse_msg(data)
     assert result.type is rpc.MsgType.AppendEntriesRequest
     assert result.term == 11
-    assert rpc.AppendEntriesRpc.from_json(result.to_json()) == result
+    assert rpc.AppendEntriesRpc.from_dict(result.to_dict()) == result
 
 
 def test_parse_append_entries_resp():
@@ -46,7 +46,7 @@ def test_parse_append_entries_resp():
     result = rpc.parse_msg(data)
     assert result.type is rpc.MsgType.AppendEntriesResponse
     assert result.term == 11
-    assert rpc.AppendEntriesResponse.from_json(result.to_json()) == result
+    assert rpc.AppendEntriesResponse.from_dict(result.to_dict()) == result
 
 
 def test_parse_request_vote():
@@ -63,7 +63,7 @@ def test_parse_request_vote():
     result = rpc.parse_msg(data)
     assert result.type is rpc.MsgType.RequestVoteRequest
     assert result.term == 12
-    assert rpc.RequestVoteRpc.from_json(result.to_json()) == result
+    assert rpc.RequestVoteRpc.from_dict(result.to_dict()) == result
 
 
 def test_parse_request_vote_resp():
@@ -78,8 +78,8 @@ def test_parse_request_vote_resp():
     result = rpc.parse_msg(data)
     assert result.type is rpc.MsgType.RequestVoteResponse
     assert result.term == 12
-    # Test that to_json and from_json are isomorphic
-    assert rpc.RequestVoteResponse.from_json(result.to_json()) == result
+    # Test that to_dict and from_dict are isomorphic
+    assert rpc.RequestVoteResponse.from_dict(result.to_dict()) == result
 
 
 def test_parse_debug():
@@ -91,7 +91,11 @@ def test_parse_debug():
 
 def test_parse_client_request():
     msg = json.dumps(
-        {"type": "ClientRequest", "body": "GET a", "callback_addr": ["127.0.0.1", 9999]}
+        {
+            "type": rpc.MsgType.ClientRequest.value,
+            "body": "GET a",
+            "callback_addr": ["127.0.0.1", 9999],
+        }
     )
     result = rpc.parse_msg(msg)
     assert result.type is rpc.MsgType.ClientRequest

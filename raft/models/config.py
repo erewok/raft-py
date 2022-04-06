@@ -1,12 +1,9 @@
 import configparser
+from functools import partial
 import logging
-import queue
 import random
-import threading
 from functools import cached_property
-from typing import Callable
 
-from . import Event, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -41,40 +38,3 @@ class Config:
             )
 
         return inner
-
-
-class Clock:
-    def __init__(
-        self,
-        event_queue: queue.Queue[EventType],
-        interval: float = 1.0,
-        interval_func: Callable[[], float] = None,
-        event_type: EventType = EventType.Tick,
-    ):
-        self.interval = interval
-        self.interval_func = interval_func
-        self.event_queue = event_queue
-        self.event_type = event_type
-        self.command_event: threading.Event = threading.Event()
-        self.thread = None
-
-    def start(self):
-        logger.debug(f"[Clock - {str(self.event_type)}] is starting up")
-        if self.thread is None:
-            self.thread = threading.Thread(
-                target=self.generate_ticks, args=(self.event_queue,)
-            )
-        self.thread.start()
-
-    def generate_ticks(self, event_q):
-        interval = self.interval_func() if self.interval_func else self.interval
-        while not self.command_event.wait(interval):
-            logger.info(f"[Clock] event: {str(self.event_type)}")
-            event_q.put(Event(self.event_type, None))
-
-        logger.debug(f"[Clock - {str(self.event_type)}] is shutting down")
-
-    def stop(self):
-        self.command_event.set()
-        self.thread = None
-        self.command_event.clear()

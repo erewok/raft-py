@@ -1,22 +1,29 @@
 import concurrent.futures
 import logging
 import traceback
-# import queue
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
 from threading import Event
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-HEADER_LEN = 10
-DEFAULT_MSG_LEN = 4096
-DEFAULT_REQUEST_TIMEOUT = 10
-LISTENER_SERVER_CLIENT_TTL = 120  # 2 minutes
-Address = Tuple[str, int]
-MsgResponse = Optional[bytes]
+from raft.io import (
+    DEFAULT_MSG_LEN,
+    DEFAULT_REQUEST_TIMEOUT,
+    HEADER_LEN,
+    CLIENT_LOG_NAME,
+    SERVER_LOG_NAME,
+    SHUTDOWN_CMD,
+    Address,
+    MsgResponse,
+    Request,
+)
+
+
 logger = logging.getLogger(__name__)
-Request = Tuple[Address, bytes]
-SHUTDOWN_CMD = b"SHUTDOWN"
 
 
+# # # # # # # # # # # # # # # # #
+# Message Protocol functions
+# # # # # # # # # # # # # # # # #
 def send_message(sock, msg: bytes):
     size = b"%10d" % len(msg)  # Make a 10-byte length field
     sock.sendall(size)
@@ -47,24 +54,9 @@ def send_and_receive(sock: socket, msg: bytes):
     return receive_message(sock)
 
 
-# class MessageProtocol:
-#     """Dave's Size-prefixed messaging class"""
-
-#     def __init__(self):
-#         self.buffer = bytearray()
-
-#     def encode_messsage(self, msg):
-#         return b"%10d" % len(msg) + msg
-
-#     def decode_messages(self, data):
-#         self.buffer.extend(data)
-#         while len(self.buffer) >= 10:
-#             size = int(self.buffer[:10])
-#             if len(self.buffer) >= 10 + size:
-#                 yield bytes(self.buffer[10 : 10 + size])
-#             del self.buffer[: 10 + size]
-
-
+# # # # # # # # # # # # # # # # #
+# Socket Server functions
+# # # # # # # # # # # # # # # # #
 def handle_socket_client(client, addr, msg_queue):
     msg = None
     try:
@@ -86,7 +78,7 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
         sock.listen()
-        logger.info(f"---Server Start: listening at {address[0]}:{address[1]}---")
+        logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
         while True:
             if listen_server_event and listen_server_event.is_set():
                 break
@@ -95,9 +87,12 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
             if result == SHUTDOWN_CMD and addr == address:
                 # received shutdown message from this host
                 break
-    logger.info(f"---Server Stop: Listening at {address[0]}:{address[1]}---")
+    logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
+# # # # # # # # # # # # # # # # #
+# Socket Client functions
+# # # # # # # # # # # # # # # # #
 def client_send_msg(
     address: Address, msg: bytes, timeout: int = DEFAULT_REQUEST_TIMEOUT
 ) -> Optional[bytes]:
@@ -112,7 +107,7 @@ def client_send_msg(
             if response == b"ok":
                 return response
         except OSError:
-            logger.error(f"---Client Send FAIL {address[0]}:{address[1]}---")
+            logger.error(f"{CLIENT_LOG_NAME} Send FAIL {address[0]}:{address[1]}")
         return None
 
 
@@ -130,7 +125,9 @@ def broadcast_requests(
             try:
                 results_by_addr[addr] = future.result()
             except Exception:
-                logger.error(f"Failed reaching socket address: {addr[0]}:{addr[1]}")
+                logger.error(
+                    f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}"
+                )
                 logger.error(traceback.format_exc())
                 results_by_addr[addr] = None
     return results_by_addr

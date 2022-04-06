@@ -1,6 +1,7 @@
 from __future__ import nested_scopes
 import pytest
 
+from raft import models
 from raft.models import Event, EventType
 from raft.models import rpc
 from raft.models import server
@@ -39,6 +40,10 @@ def receive_server_candidate_vote_event(config):
         )
 
     return inner
+
+
+def is_empty_response(resp: server.ResponsesEvents) -> bool:
+    return not resp.responses and not resp.events
 
 
 # Testing Conversions from one Server type to another
@@ -119,20 +124,35 @@ def test_follower_msg_append(
 
 # Testing Candidate conversions
 @pytest.mark.parametrize(
-    "etype,new_class",
+    "etype,new_class,events",
     (
-        (EventType.SelfWinElection, server.Leader),
-        (EventType.LeaderAppendLogEntryRpc, server.Follower),
-        (EventType.Tick, None),
+        (
+            EventType.SelfWinElection,
+            server.Leader,
+            [models.EVENT_CONVERSION_TO_LEADER, models.EVENT_START_HEARTBEAT],
+        ),
+        (
+            EventType.LeaderAppendLogEntryRpc,
+            server.Follower,
+            [models.EVENT_CONVERSION_TO_FOLLOWER],
+        ),
+        (EventType.Tick, None, []),
     ),
 )
-def test_follower_candidate_convert(etype, new_class, candidate):
+def test_follower_candidate_convert(etype, new_class, events, candidate):
     event = Event(etype, None)
     inst, resps = candidate.handle_event(event)
-    assert resps is None
+    if etype == EventType.Tick:
+        assert is_empty_response(resps)
+    else:
+        assert not is_empty_response(resps)
+        for left, right in zip(events, resps.events):
+            assert left == right
+
     if new_class is None:
         assert inst == candidate
-        return
+        return None  # Further tests below are about conversion
+
     assert isinstance(inst, new_class)
     assert id(inst) != id(candidate)
     if isinstance(inst, server.Candidate):
@@ -180,34 +200,38 @@ def test_follower_handle_request_vote_rpc(
     event.msg.last_log_term = follower.log[-1].term
     follower.node_id = 2
 
-    result, empty = follower.handle_request_vote_rpc(event)
-    assert empty is None
-    res = result[0]
-    assert res.vote_granted
+    results = follower.handle_request_vote_rpc(event)
+    assert not is_empty_response(results)
+    resp = results.responses[0]
+    assert resp.vote_granted
     assert follower.voted_for == 1
-    assert res.dest == event.msg.source
-    assert res.source == event.msg.dest
+    assert resp.dest == event.msg.source
+    assert resp.source == event.msg.dest
+    assert len(results.events) == 1
+    assert results.events[0].type == EventType.ResetElectionTimeout
 
     # mark it something else and see vote rejected
     follower.voted_for = 3
-    result, empty = follower.handle_request_vote_rpc(event)
-    assert empty is None
-    res = result[0]
-    assert not res.vote_granted
+    results = follower.handle_request_vote_rpc(event)
+    assert not is_empty_response(results)
+    resp = results.responses[0]
+    assert not resp.vote_granted
     assert follower.voted_for == 3
-    assert res.dest == event.msg.source
-    assert res.source == event.msg.dest
+    assert resp.dest == event.msg.source
+    assert resp.source == event.msg.dest
+    assert not results.events
 
     # reset to None and check the log_index is long enough for vote
     follower.voted_for = None
     event.msg.last_log_index = 2
-    result, empty = follower.handle_request_vote_rpc(event)
-    assert empty is None
-    res = result[0]
-    assert not res.vote_granted
+    results = follower.handle_request_vote_rpc(event)
+    assert not is_empty_response(results)
+    resp = results.responses[0]
+    assert not resp.vote_granted
     assert follower.voted_for is None
-    assert res.dest == event.msg.source
-    assert res.source == event.msg.dest
+    assert resp.dest == event.msg.source
+    assert resp.source == event.msg.dest
+    assert not results.events
 
     inst, resps_events = follower.handle_event(event)
     assert inst is follower
@@ -215,6 +239,37 @@ def test_follower_handle_request_vote_rpc(
     result, empty = resps_events
     assert not empty
     assert not result[0].vote_granted
+    assert not results.events
+
+
+def test_handle_vote_response_greater_term(
+    candidate, follower, fig7_a_log, candidate_request_vote_event
+):
+    # First, we try it with a term that's < Candidate's term
+    candidate.current_term = 20
+    follower.log = fig7_a_log
+    follower.current_term = follower.log[-1].term
+    # Reusing logic from follower-request vote tests
+    event = candidate_request_vote_event(1, 8, ("127.0.0.1", 3112))
+    event.msg.last_log_index = len(follower.log) + 1
+    event.msg.last_log_term = follower.log[-1].term
+    follower.node_id = 2
+    responses, _ = follower.handle_request_vote_rpc(event)
+    # sanity check
+    assert responses
+    resp_event = Event(EventType.ReceiveServerCandidateVote, responses[0])
+    inst, responses = candidate.handle_event(resp_event)
+    assert is_empty_response(responses)
+    assert inst == candidate
+
+    # Now we try it again and turn the candidate's current_term down
+    # Calling handle-event with a reponse with greater term creates conversion
+    candidate.current_term = 1
+    inst, responses = candidate.handle_event(resp_event)
+    assert inst != candidate
+    assert not is_empty_response(responses)
+    assert isinstance(inst, server.Follower)
+    assert responses.events[0] == models.EVENT_CONVERSION_TO_FOLLOWER
 
 
 def test_handle_vote_response(
@@ -232,14 +287,14 @@ def test_handle_vote_response(
     assert responses
     resp_event = Event(EventType.ReceiveServerCandidateVote, responses[0])
     result = candidate.handle_vote_response(resp_event)
-    assert result is None
+    assert is_empty_response(result)
     # Idempotent: same response doesn't magically make them win
     result = candidate.handle_vote_response(resp_event)
-    assert result is None
+    assert is_empty_response(result)
     # After they have more votes, they can win
     candidate.votes_received = set((3, 4))
     result = candidate.handle_vote_response(resp_event)
-    assert result is not None
+    assert not is_empty_response(result)
     _, events = result
     assert events
     assert events[0].type == EventType.SelfWinElection
@@ -254,14 +309,16 @@ def test_leader_handle_event(leader, sample_append_confirm_rpc):
     leader.current_term = 20
     # should not convert
     inst, maybe_resp_evs = leader.handle_event(event)
-    assert maybe_resp_evs is None
+    assert is_empty_response(maybe_resp_evs)
     assert inst is leader
 
     # Try to coerce it to convert
     event.msg.term = 100
     inst2, maybe_resp_evs = leader.handle_event(event)
     assert inst2 is not leader
-    assert maybe_resp_evs is None
+    assert not is_empty_response(maybe_resp_evs)
+    assert len(maybe_resp_evs.events) == 1
+    assert maybe_resp_evs.events[0] == models.EVENT_CONVERSION_TO_FOLLOWER
     assert isinstance(inst2, server.Follower)
 
 
@@ -317,7 +374,7 @@ APPEND_FAIL = Event(
 def test_leader_handle_append_response(leader):
     """There's a lot going on in this test"""
     inst, resps = leader.handle_event(APPEND_SUCCESS)
-    assert resps is None
+    assert is_empty_response(resps)
     assert inst is leader
     assert leader.commit_index == 8
     assert leader.match_index[APPEND_SUCCESS.msg.source_node_id] == len(leader.log)
@@ -328,7 +385,7 @@ def test_leader_handle_append_response(leader):
     current_match_for_node = leader.next_index[APPEND_FAIL.msg.source_node_id]
 
     inst, resps = leader.handle_event(APPEND_FAIL)
-    assert resps is None
+    assert is_empty_response(resps)
     assert inst is leader
     assert leader.commit_index == 8
     assert leader.match_index[APPEND_FAIL.msg.source_node_id] == current_match_for_node

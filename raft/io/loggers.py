@@ -1,12 +1,19 @@
 import logging.config
 
+try:
+    from rich.logging import RichHandler
+
+    RICH_HANDLING_ON = True
+except ImportError:
+    RICH_HANDLING_ON = False
+
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": True,
     "formatters": {
         "standard": {
             "format": "%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s: %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S:%M",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
     "handlers": {
@@ -23,7 +30,7 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "propagate": False,
         },
-        "raft": {  # root logger
+        "raft": {
             "handlers": ["default"],
             "level": "INFO",
             "propagate": False,
@@ -38,7 +45,7 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "propagate": False,
         },
-        "__main__": {  # if __name__ == '__main__'
+        "__main__": {
             "handlers": ["default"],
             "level": "INFO",
             "propagate": False,
@@ -46,5 +53,12 @@ LOGGING_CONFIG = {
     },
 }
 
+if RICH_HANDLING_ON:
+    LOGGING_CONFIG["handlers"]["default"] = {  # type: ignore
+        "level": "INFO",
+        "class": "rich.logging.RichHandler",
+        "rich_tracebacks": True,
+        "markup": True,
+    }
 
 logging.config.dictConfig(LOGGING_CONFIG)

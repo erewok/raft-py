@@ -23,34 +23,28 @@ class MsgType(enum.IntEnum):
         return self.name
 
 
-def parse_msg(msg_bytes):
-    try:
-        return AppendEntriesRpc.from_json(msg_bytes)
-    except ValueError:
-        pass
-    try:
-        return AppendEntriesResponse.from_json(msg_bytes)
-    except ValueError:
-        pass
-    try:
-        return RequestVoteRpc.from_json(msg_bytes)
-    except ValueError:
-        pass
-    try:
-        return RequestVoteResponse.from_json(msg_bytes)
-    except ValueError:
-        pass
+def parse_msg(msg_bytes: bytes):
     try:
         data = json.loads(msg_bytes)
     except (ValueError, TypeError):
         data = {}
-    if data.get("type") == MsgType.DEBUG_MESSAGE:
-        return Debug()
-    if data.get("type") == str(MsgType.ClientRequest):
+    msg_type = data.get("type")
+    if msg_type == MsgType.RequestVoteRequest:
+        return RequestVoteRpc.from_dict(data)
+    elif msg_type == MsgType.RequestVoteResponse:
+        return RequestVoteResponse.from_dict(data)
+    elif msg_type == MsgType.AppendEntriesRequest:
+        return AppendEntriesRpc.from_dict(data)
+    elif msg_type == MsgType.AppendEntriesResponse:
+        return AppendEntriesResponse.from_dict(data)
+    elif msg_type == MsgType.ClientRequest:
         return ClientRequest(
             cmd=data.get("body", "").encode("utf-8"),
             source=tuple(data.get("callback_addr", [])),
         )
+    elif msg_type == MsgType.DEBUG_MESSAGE:
+        return Debug()
+
     # if we got here, we couldn't successfully parse this thing
     raise ValueError("This message is unparseable as an RPC message")
 
@@ -142,11 +136,7 @@ class AppendEntriesRpc(RpcBase, Generic[RPC]):
         }
 
     @classmethod
-    def from_json(cls, msg: bytes):
-        try:
-            data = json.loads(msg)
-        except (ValueError, TypeError):
-            data = {}
+    def from_dict(cls, data: dict):
         if data.get("type") != MsgType.AppendEntriesRequest:
             raise ValueError("Msg is not an AppendEntriesRequest")
         return cls(
@@ -203,11 +193,7 @@ class AppendEntriesResponse(RpcBase, Generic[RPC]):
         }
 
     @classmethod
-    def from_json(cls, msg: bytes):
-        try:
-            data = json.loads(msg)
-        except (ValueError, TypeError):
-            data = {}
+    def from_dict(cls, data: dict):
         if data.get("type") != MsgType.AppendEntriesResponse:
             raise ValueError("Msg is not an AppendEntriesResponse")
         return cls(
@@ -262,11 +248,7 @@ class RequestVoteRpc(RpcBase, Generic[RPC]):
         }
 
     @classmethod
-    def from_json(cls, msg: bytes):
-        try:
-            data = json.loads(msg)
-        except (ValueError, TypeError):
-            data = {}
+    def from_dict(cls, data: dict):
         if data.get("type") != MsgType.RequestVoteRequest:
             raise ValueError("Msg is not an RequestVoteRequest")
         return cls(
@@ -310,11 +292,7 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         }
 
     @classmethod
-    def from_json(cls, msg: bytes):
-        try:
-            data = json.loads(msg)
-        except (ValueError, TypeError):
-            data = {}
+    def from_dict(cls, data: dict):
         if data.get("type") != MsgType.RequestVoteResponse:
             raise ValueError("Msg is not an RequestVoteResponse")
         return cls(

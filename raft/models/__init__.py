@@ -1,5 +1,7 @@
 import enum
-from typing import Any
+from typing import Any, Optional
+
+from .rpc import parse_msg, MsgType
 
 # Next == /\ \/ \E i \in Server : Restart(i)
 #            \/ \E i \in Server : Timeout(i)
@@ -31,6 +33,7 @@ class EventType(enum.IntEnum):
     ConversionToLeader = 15
     ConversionToFollower = 16
 
+    StartHeartbeat = 25
     DEBUG_REQUEST = 99
 
     def __str__(self):
@@ -45,6 +48,12 @@ class Event:
         self.type = etype
         self.msg = msg
 
+    def __eq__(self, other):
+        return self.type == other.type and self.msg == other.msg
+
+    def __str__(self):
+        return f"[{self.type}] {self.msg}"
+
 
 # # # # # # # # # # # # # # # # # #
 # Static/Constant Events          #
@@ -57,3 +66,25 @@ EVENT_SELF_WON_ELECTION = Event(EventType.SelfWinElection, None)
 EVENT_CONVERSION_TO_LEADER = Event(EventType.ConversionToLeader, None)
 EVENT_CONVERSION_TO_FOLLOWER = Event(EventType.ConversionToFollower, None)
 EVENT_HEARTBEAT = Event(EventType.HeartbeatTime, None)
+EVENT_START_HEARTBEAT = Event(EventType.StartHeartbeat, None)
+
+
+def parse_msg_to_event(msg: bytes) -> Optional[Event]:
+    try:
+        result = parse_msg(msg)
+    except ValueError:
+        return None
+
+    if result.type == MsgType.AppendEntriesRequest:
+        return Event(EventType.LeaderAppendLogEntryRpc, result)
+    elif result.type == MsgType.AppendEntriesResponse:
+        return Event(EventType.AppendEntryConfirm, result)
+    elif result.type == MsgType.RequestVoteRequest:
+        return Event(EventType.CandidateRequestVoteRpc, result)
+    elif result.type == MsgType.RequestVoteResponse:
+        return Event(EventType.ReceiveServerCandidateVote, result)
+    elif result.type == MsgType.ClientRequest:
+        return Event(EventType.ClientAppendRequest, result)
+    elif result.type == MsgType.DEBUG_MESSAGE:
+        return Event(EventType.DEBUG_REQUEST, result)
+    return None
