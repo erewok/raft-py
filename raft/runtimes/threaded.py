@@ -12,7 +12,7 @@ from raft.models import (
 from raft.models.clock import ThreadedClock
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
-from .base import BaseEventController, BaseRuntime
+from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
 
 logger = logging.getLogger(__name__)
@@ -167,6 +167,7 @@ class ThreadedEventController(BaseEventController):
     def stop_election_timer(self):
         if self.election_timer is not None:
             self.election_timer.stop()
+        self.election_timer = None
 
 
 class ThreadedRuntime(BaseRuntime):
@@ -180,15 +181,6 @@ class ThreadedRuntime(BaseRuntime):
         )
         self.command_q: queue.Queue[bool] = queue.Queue(maxsize=1)
         self.thread = None
-        self.runtime_events = set(
-            (
-                EventType.DEBUG_REQUEST,
-                EventType.ResetElectionTimeout,
-                EventType.ConversionToFollower,
-                EventType.ConversionToLeader,
-                EventType.StartHeartbeat,
-            )
-        )
 
     @property
     def log_name(self):
@@ -251,7 +243,7 @@ class ThreadedRuntime(BaseRuntime):
             return None
         if event.msg:
             msg_type = event.msg.type
-        if event.type in self.runtime_events:
+        if event.type in RUNTIME_EVENTS:
             self.runtime_handle_event(event)
 
         logger.info(
@@ -266,7 +258,7 @@ class ThreadedRuntime(BaseRuntime):
             self.event_controller.add_response_to_queue(response)
 
         for further_event in more_events:
-            if further_event.type in self.runtime_events:
+            if further_event.type in RUNTIME_EVENTS:
                 self.runtime_handle_event(further_event)
             else:
                 self.event_controller.events.put(further_event)

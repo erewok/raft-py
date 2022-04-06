@@ -35,11 +35,14 @@ def get_storage_class(runtime, storage_class):
 
 def get_runtime(runtime):
     """Ensures a valid runtime arg has been passed"""
-    if issubclass(runtime, runtimes.base.BaseRuntime):
-        return runtime
-    elif not hasattr(runtimes, runtime):
+    if isinstance(runtime, str) and hasattr(runtimes, runtime):
+        return getattr(runtimes, runtime)
+    elif isinstance(runtime, str) and not hasattr(runtimes, runtime):
         raise ValueError(f"Invalid runtime class: {runtime}")
-    return getattr(runtimes, runtime)
+    elif issubclass(runtime, runtimes.base.BaseRuntime):
+        return runtime
+
+    raise ValueError(f"Invalid runtime class: {runtime}")
 
 
 def main(node_id, config, runtime="ThreadedRuntime"):
