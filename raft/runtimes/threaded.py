@@ -109,10 +109,9 @@ class ThreadedEventController(BaseEventController):
             self.outbound_msg_queue.task_done()
             if item is self.termination_sentinel or self.command_event.is_set():
                 break
-            logger.debug(f"Outbound_Msg={item}")
             (addr, msg_bytes) = item
             transport.client_send_msg(addr, msg_bytes)
-            logger.debug(f"{self._log_name} sent item {msg_bytes.decode()}")
+            logger.debug(f"{self._log_name} sent item {msg_bytes.decode()} to {addr}")
         logger.info(f"{self._log_name} Stop: process outbound messages")
 
     def run(self):

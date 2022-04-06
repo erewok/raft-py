@@ -53,15 +53,12 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
         # need a singleton to trigger closing states
-        self.command_event: trio.Event = command_event if command_event else trio.Event()
+        self.command_event: trio.Event = (
+            command_event if command_event else trio.Event()
+        )
         # messages inbound should be placed here
         self.inbound_send_channel: Optional[trio.abc.SendChannel] = None
         self.inbound_read_channel: Optional[trio.abc.ReadChannel] = None
-        # inbound messages get translated to events here: InboundMsg -> Event
-        self.events: Optional[trio.abc.SendChannel] = None
-        # outbound messages placed here will be sent out
-        self.outbound_send_channel: Optional[trio.abc.SendChannel] = None
-        self.outbound_read_channel: Optional[trio.abc.SendChannel] = None
 
         self._log_name = f"[EventController]"
         if loggers.RICH_HANDLING_ON:
@@ -71,8 +68,10 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
     async def run(self, events_channel: trio.abc.SendChannel):
-        # Set events channel
-        (inbound_send_channel, inbound_read_channel,) = trio.open_memory_channel(100)
+        (
+            inbound_send_channel,
+            inbound_read_channel,
+        ) = trio.open_memory_channel(100)
         async with inbound_send_channel, inbound_read_channel:
             self.nursery.start_soon(
                 transport_async.listen_server,
@@ -98,17 +97,23 @@ class AsyncEventController(BaseEventController):
 
     async def process_inbound_msgs(
         self,
-        events_chan: trio.abc.SendChannel,
+        events_channel: trio.abc.SendChannel,
         inbound_msg_chan: trio.abc.ReceiveChannel,
     ):
-        """Received Messages -> Events Queue"""
+        """
+        Received Messages -> Events Queue
+
+        Inbound messages get translated to events here: InboundMsg -> Event
+
+        After that, they are placed on the `events_chan`
+        """
         logger.info(f"{self._log_name} Start: process inbound messages")
         async with inbound_msg_chan:
-            async with events_chan:
+            async with events_channel:
                 while not self.command_event.is_set():
                     async for item in inbound_msg_chan:
                         event = await self.client_msg_into_event(item)
-                        await events_chan.send(event)
+                        await events_channel.send(event)
                         event_type = event.type if event is not None else "none"
                         logger.info(
                             (
@@ -203,7 +208,9 @@ class AsyncRuntime(BaseRuntime):
     async def handle_reset_election_timeout(self, _: Event):
         if self.debug:
             logger.info(f"{self.log_name} resetting election timer")
-        await self.event_controller.run_election_timeout_timer(self.events_send_channel.clone())
+        await self.event_controller.run_election_timeout_timer(
+            self.events_send_channel.clone()
+        )
 
     async def handle_start_heartbeat(self, _: Event):
         logger.info(f"{self.log_name} starting heartbeat")
@@ -218,6 +225,7 @@ class AsyncRuntime(BaseRuntime):
         elif event.type == EventType.ConversionToFollower:
             logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
             await self.handle_reset_election_timeout(event)
+            self.event_controller.stop_heartbeat()
         elif event.type == EventType.ConversionToLeader:
             logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
             self.event_controller.stop_election_timer()
@@ -289,3 +297,4 @@ class AsyncRuntime(BaseRuntime):
 
     def stop(self):
         self.command_event.set()
+        logger.warn(f"{self.log_name} Shutting down now")
