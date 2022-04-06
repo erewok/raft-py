@@ -90,11 +90,14 @@ async def client_send_msg(
 ) -> Optional[bytes]:
     logger.debug(f"{CLIENT_LOG_NAME} connecting to {address[0]}:{address[1]}")
     with trio.move_on_after(timeout):
-        client_stream = await trio.open_tcp_stream(address[0], address[1])
-        async with client_stream:
-            nursery.start_soon(send_message, client_stream, msg)
-            result = await receive_message(client_stream)
-            await result_chan.send((address, result))
+        try:
+            client_stream = await trio.open_tcp_stream(address[0], address[1])
+            async with client_stream:
+                nursery.start_soon(send_message, client_stream, msg)
+                result = await receive_message(client_stream)
+                await result_chan.send((address, result))
+        except OSError:
+            logger.error(f"{CLIENT_LOG_NAME} Send FAIL {address[0]}:{address[1]}")
 
 
 async def client_send_success_reporter(

@@ -226,6 +226,7 @@ class ThreadedRuntime(BaseRuntime):
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
             logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+            self.event_controller.stop_election_timer()
         elif event.type == EventType.StartHeartbeat:
             self.handle_start_heartbeat(event)
 

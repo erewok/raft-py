@@ -136,7 +136,8 @@ class AsyncEventController(BaseEventController):
                     interval=self.heartbeat_timeout_ms,
                     event_type=EventType.HeartbeatTime,
                 )
-                self.nursery.start_soon(self.heartbeat.start)
+
+        self.nursery.start_soon(self.heartbeat.start)
 
     def stop_heartbeat(self):
         if self.heartbeat is not None:
@@ -155,9 +156,10 @@ class AsyncEventController(BaseEventController):
                 self.election_timer = clock.AsyncClock(
                     events_channel.clone(),
                     interval_func=self.get_election_time,
-                    event_type=EventType.HeartbeatTime,
+                    event_type=EventType.ElectionTimeoutStartElection,
                 )
-                self.nursery.start_soon(self.election_timer.start)
+
+        self.nursery.start_soon(self.election_timer.start)
 
     def stop_election_timer(self):
         if self.election_timer is not None:
@@ -201,7 +203,7 @@ class AsyncRuntime(BaseRuntime):
     async def handle_reset_election_timeout(self, _: Event):
         if self.debug:
             logger.info(f"{self.log_name} resetting election timer")
-        await self.event_controller.run_election_timeout_timer(self.events_send_channel)
+        await self.event_controller.run_election_timeout_timer(self.events_send_channel.clone())
 
     async def handle_start_heartbeat(self, _: Event):
         logger.info(f"{self.log_name} starting heartbeat")
@@ -217,7 +219,8 @@ class AsyncRuntime(BaseRuntime):
             logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
             await self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToLeader:
-            await logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+            logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+            self.event_controller.stop_election_timer()
         elif event.type == EventType.StartHeartbeat:
             await self.handle_start_heartbeat(event)
 
