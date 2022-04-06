@@ -37,12 +37,11 @@ class ThreadedClock:
         self.event_type = event_type
         self.command_event: threading.Event = threading.Event()
         self.thread = None
-        self._log_name = f"[Clock - {str(self.event_type)}]"
+        self._log_name = f"[Clock.{id(self)} - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[yellow]Clock[/] - [blue]{str(self.event_type)}[/]]"
+            self._log_name = f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
 
     def start(self):
-        logger.info(f"{self._log_name} is starting up")
         if self.thread is None:
             self.thread = threading.Thread(
                 target=self.generate_ticks, args=(self.event_queue,)
@@ -51,6 +50,7 @@ class ThreadedClock:
 
     def generate_ticks(self, event_q):
         interval = self.interval_func() if self.interval_func else self.interval
+        logger.info(f"{self._log_name} starting up with interval {interval}")
         while not self.command_event.wait(interval):
             logger.debug(f"{self._log_name}")
             event_q.put(Event(self.event_type, None))
@@ -86,19 +86,20 @@ class AsyncClock:
         self.send_channel = send_channel
         self.event_type = event_type
         self.command_event: trio.Event = trio.Event()
-        self._log_name = f"[Clock - {str(self.event_type)}]"
+        self._log_name = f"[Clock.{id(self)} - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[yellow]Clock[/] - [blue]{str(self.event_type)}[/]]"
+            self._log_name = f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
 
     async def start(self):
         await self.generate_ticks(self.send_channel)
 
     async def generate_ticks(self, send_channel: trio.abc.SendChannel):
         interval = self.interval_func() if self.interval_func else self.interval
+        logger.info(f"{self._log_name} starting up with interval {interval}")
         async with send_channel:
             while not self.command_event.is_set():
                 await trio.sleep(interval)
-                logger.debug(f"{self._log_name} tick")
+                logger.info(f"{self._log_name} tick")
                 await send_channel.send(Event(self.event_type, None))
 
     def stop(self):

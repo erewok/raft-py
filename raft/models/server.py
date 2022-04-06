@@ -283,9 +283,6 @@ class Follower(BaseServer, Generic[S]):
                     logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
 
-        logger.info(
-            f"{self._log_name} Message originating from {event.msg.source} to {event.msg.dest}"
-        )
         msg: rpc.RPCMessage = rpc.AppendEntriesResponse(  # type: ignore
             term=self.current_term,
             match_index=event.msg.prev_log_index + len(event.msg.entries)
@@ -298,7 +295,7 @@ class Follower(BaseServer, Generic[S]):
         )
 
         logger.info(
-            f"{self._log_name} Append entries request was successful: {success}"
+            f"{self._log_name} Append entries request from {event.msg.source} was successful: {success}"
         )
 
         return ResponsesEvents([msg], [Event(EventType.ResetElectionTimeout, None)])
@@ -420,7 +417,7 @@ class Leader(BaseServer, Generic[S]):
         "success" needs to be translated into consensus.
         Log entries have to replicated on 3 machines (including the leader).
         The log entries have to be "committed" and "applied".
-        Once that happens, then its ok to reply back to the client.
+        Once that happens, then it is ok to reply back to the client.
         """
         node_id = event.msg.source_node_id
         if event.msg.success:

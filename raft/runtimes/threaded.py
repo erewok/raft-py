@@ -61,7 +61,7 @@ class ThreadedEventController(BaseEventController):
 
         self._log_name = f"[EventController]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[green]EventController[/]]"
+            self._log_name = f"[[bright_cyan]ThreadedEventController[/]]"
 
     def add_response_to_queue(self, msg):
         try:
@@ -184,8 +184,8 @@ class ThreadedRuntime(BaseRuntime):
     @property
     def log_name(self):
         if loggers.RICH_HANDLING_ON:
-            return f"[[green]Runtime[/] - {self.instance.log_name()}]"
-        return f"[Runtime - {self.instance.log_name()}]"
+            return f"[[bright_cyan]ThreadedRuntime[/] - {self.instance.log_name()}]"
+        return f"[ThreadedRuntime - {self.instance.log_name()}]"
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
@@ -223,6 +223,7 @@ class ThreadedRuntime(BaseRuntime):
         elif event.type == EventType.ConversionToFollower:
             logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
             self.handle_reset_election_timeout(event)
+            self.event_controller.stop_heartbeat()
         elif event.type == EventType.ConversionToLeader:
             logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
             self.event_controller.stop_election_timer()

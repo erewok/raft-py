@@ -5,6 +5,7 @@ from raft.io import loggers  # noqa
 from raft.io import transport_async
 from raft.internal import trio  # only present if extra "async" installed
 from raft.models import (
+    EVENT_CONVERSION_TO_FOLLOWER,
     Event,
     EventType,
     parse_msg_to_event,
@@ -59,19 +60,17 @@ class AsyncEventController(BaseEventController):
         # messages inbound should be placed here
         self.inbound_send_channel: Optional[trio.abc.SendChannel] = None
         self.inbound_read_channel: Optional[trio.abc.ReadChannel] = None
+        self.cancel_scopes: dict[str, trio.Nursery] = {}
 
-        self._log_name = f"[EventController]"
+        self._log_name = f"[AsyncEventController]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[green]EventController[/]]"
+            self._log_name = f"[[bright_cyan]AsyncEventController[/]]"
 
     def set_nursery(self, nursery: trio.Nursery):
         self.nursery = nursery
 
     async def run(self, events_channel: trio.abc.SendChannel):
-        (
-            inbound_send_channel,
-            inbound_read_channel,
-        ) = trio.open_memory_channel(100)
+        (inbound_send_channel, inbound_read_channel,) = trio.open_memory_channel(100)
         async with inbound_send_channel, inbound_read_channel:
             self.nursery.start_soon(
                 transport_async.listen_server,
@@ -113,19 +112,21 @@ class AsyncEventController(BaseEventController):
                 while not self.command_event.is_set():
                     async for item in inbound_msg_chan:
                         event = await self.client_msg_into_event(item)
-                        await events_channel.send(event)
-                        event_type = event.type if event is not None else "none"
-                        logger.info(
-                            (
-                                f"{self._log_name} turned item {str(item)} into {event_type} event"
+                        if event:
+                            await events_channel.send(event)
+                            logger.info(
+                                (
+                                    f"{self._log_name} turned item {str(item)} into {event.type} event"
+                                )
                             )
-                        )
                         if self.command_event.is_set():
                             break
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
     async def send_outbound_msg(self, response: rpc.RPCMessage):
-        logger.info(f"{self._log_name}: send outbound message")
+        logger.info(
+            f"{self._log_name}: send outbound message {response.type} to {response.dest}"
+        )
         results_tx, _ = trio.open_memory_channel(2)
         async with results_tx:
             await transport_async.client_send_msg(
@@ -134,20 +135,25 @@ class AsyncEventController(BaseEventController):
 
     async def run_heartbeat(self, events_channel: trio.abc.SendChannel):
         # Start Heartbeat timer (only leader should use this...)
-        if self.heartbeat is None:
-            async with events_channel:
+        self.stop_heartbeat()
+        with trio.CancelScope() as cancel_scope:
+            if self.heartbeat is None:
                 self.heartbeat = clock.AsyncClock(
-                    events_channel.clone(),
+                    events_channel,
                     interval=self.heartbeat_timeout_ms,
                     event_type=EventType.HeartbeatTime,
                 )
-
-        self.nursery.start_soon(self.heartbeat.start)
+                self.cancel_scopes["heartbeat"] = cancel_scope
+                await self.heartbeat.start()
 
     def stop_heartbeat(self):
+        if cancel_scope := self.cancel_scopes.get("heartbeat"):
+            cancel_scope.cancel()
+            del self.cancel_scopes["heartbeat"]
+
         if self.heartbeat is not None:
             self.heartbeat.stop()
-        self.heartbeat = None
+            self.heartbeat = None
 
     async def run_election_timeout_timer(self, events_channel: trio.abc.SendChannel):
         """
@@ -156,20 +162,23 @@ class AsyncEventController(BaseEventController):
         """
         self.stop_election_timer()
 
-        if self.election_timer is None:
-            async with events_channel:
+        with trio.CancelScope() as cancel_scope:
+            if self.election_timer is None:
                 self.election_timer = clock.AsyncClock(
-                    events_channel.clone(),
+                    events_channel,
                     interval_func=self.get_election_time,
                     event_type=EventType.ElectionTimeoutStartElection,
                 )
-
-        self.nursery.start_soon(self.election_timer.start)
+                self.cancel_scopes["election_timer"] = cancel_scope
+                await self.election_timer.start()
 
     def stop_election_timer(self):
+        if cancel_scope := self.cancel_scopes.get("election_timer"):
+            cancel_scope.cancel()
+            del self.cancel_scopes["election_timer"]
         if self.election_timer is not None:
             self.election_timer.stop()
-        self.election_timer = None
+            self.election_timer = None
 
 
 class AsyncRuntime(BaseRuntime):
@@ -188,8 +197,8 @@ class AsyncRuntime(BaseRuntime):
     @property
     def log_name(self):
         if loggers.RICH_HANDLING_ON:
-            return f"[[green]Runtime[/] - {self.instance.log_name()}]"
-        return f"[Runtime - {self.instance.log_name()}]"
+            return f"[[bright_cyan]AsyncRuntime[/] - {self.instance.log_name()}]"
+        return f"[AsyncRuntime - {self.instance.log_name()}]"
 
     async def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
@@ -206,15 +215,17 @@ class AsyncRuntime(BaseRuntime):
             logger.info(f"\t`Log`: \t {repr(self.instance.log)}")
 
     async def handle_reset_election_timeout(self, _: Event):
-        if self.debug:
-            logger.info(f"{self.log_name} resetting election timer")
-        await self.event_controller.run_election_timeout_timer(
+        logger.info(f"{self.log_name} resetting election timer")
+        self.nursery.start_soon(
+            self.event_controller.run_election_timeout_timer,
             self.events_send_channel.clone()
         )
 
     async def handle_start_heartbeat(self, _: Event):
         logger.info(f"{self.log_name} starting heartbeat")
-        await self.event_controller.run_heartbeat(self.events_send_channel)
+        self.nursery.start_soon(
+            self.event_controller.run_heartbeat, self.events_send_channel.clone()
+        )
 
     async def runtime_handle_event(self, event):
         """For events that need to interact with the runtime"""
@@ -289,6 +300,7 @@ class AsyncRuntime(BaseRuntime):
                 nursery.start_soon(
                     self.event_controller.run, self.events_send_channel.clone()
                 )
+                await self.events_send_channel.send(EVENT_CONVERSION_TO_FOLLOWER)
                 await self.run_event_handler()
 
     def run(self):
