@@ -2,7 +2,10 @@
 
 This is a work-in-progress attempt to implement Raft in Python. This codebase represents a personal exploration of the problem of Raft, so it's not intended as a model or complete implementation.
 
-Inspiration for this project has come from the original Raft paper.
+Inspiration for this project has come from the original Raft paper. This project uses the following Python libraries:
+
+- `trio`
+- `rich`
 
 ## Running
 

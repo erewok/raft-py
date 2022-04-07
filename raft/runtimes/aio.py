@@ -113,18 +113,17 @@ class AsyncEventController(BaseEventController):
         logger.info(f"{self._log_name} Start: process inbound messages")
         async with inbound_msg_chan:
             async with events_channel:
-                while not self.command_event.is_set():
-                    async for item in inbound_msg_chan:
-                        event = await self.client_msg_into_event(item)
-                        if event:
-                            await events_channel.send(event)
-                            logger.info(
-                                (
-                                    f"{self._log_name} turned item {str(item)} into {event.type} event"
-                                )
+                async for item in inbound_msg_chan:
+                    event = await self.client_msg_into_event(item)
+                    if event:
+                        await events_channel.send(event)
+                        logger.info(
+                            (
+                                f"{self._log_name} turned item {str(item)} into {event.type} event"
                             )
-                        if self.command_event.is_set():
-                            break
+                        )
+                    if self.command_event.is_set():
+                        break
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
     async def send_outbound_msg(self, response: rpc.RPCMessage):
@@ -286,11 +285,10 @@ class AsyncRuntime(BaseRuntime):
     async def run_event_handler(self):
         logger.warn(f"{self.log_name}: event handler processing started")
         async with self.events_receive_channel:
-            while not self.command_event.is_set():
-                async for event in self.events_receive_channel:
-                    await self.handle_event(event)
-                    if self.command_event.is_set():
-                        break
+            async for event in self.events_receive_channel:
+                await self.handle_event(event)
+                if self.command_event.is_set():
+                    break
         logger.warn(f"{self.log_name} Stop: Shutting down primary event handler")
 
     async def run_async(self):
