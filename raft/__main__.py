@@ -45,8 +45,8 @@ def get_runtime(runtime):
     raise ValueError(f"Invalid runtime class: {runtime}")
 
 
-def main(node_id, config, runtime="ThreadedRuntime"):
-    runtime = runtime or runtimes.ThreadedRuntime
+def main(node_id, config, runtime="AsyncRuntime"):
+    runtime = runtime or runtimes.AsyncRuntime
     RunClass = get_runtime(runtime)
     storage_class = get_storage_class(RunClass, config.storage_class)
     node = RunClass(node_id, config, storage_class)
