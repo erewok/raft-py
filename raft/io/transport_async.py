@@ -67,20 +67,11 @@ async def listen_server(address, send_channel: trio.abc.SendChannel):
         handler = partial(handle_socket_client, send_channel)
         logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
         await trio.serve_tcp(handler, address[1])
-        logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
 # # # # # # # # # # # # # # # # #
 # Socket Client functions
 # # # # # # # # # # # # # # # # #
-async def client_recv_msg(client_stream):
-    logger.debug(f"{CLIENT_LOG_NAME} receiving")
-    total = b""
-    async for data in client_stream:
-        total += data
-    return total
-
-
 async def client_send_msg(
     nursery,
     address: Address,
@@ -102,21 +93,26 @@ async def client_send_msg(
 
 async def client_send_success_reporter(
     read_chan: trio.abc.ReceiveChannel,
-) -> Dict[Address, MsgResponse]:
+) -> Dict[Address, List[MsgResponse]]:
     results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
     async with read_chan:
         async for (address, resp) in read_chan:
-            results_by_addr[address] = resp
+            if address not in results_by_addr:
+                results_by_addr[address] = []
+            results_by_addr[address].append(resp)
     return results_by_addr
 
 
 async def broadcast_requests(
-    address_msgs: List[Request], timeout: int = 1
-) -> Dict[Address, MsgResponse]:
+    address_msgs: List[Request], result_chan: Optional[trio.abc.SendChannel] = None, timeout: int = 1
+) -> Dict[Address, List[MsgResponse]]:
     sender_with_timeout = partial(client_send_msg, timeout=timeout)
 
     async with trio.open_nursery() as nursery:
-        results_tx, results_rx = trio.open_memory_channel(40)
+        if result_chan is None:
+            # This is a fire-and-forget case: the caller won't get anything back
+            results_tx, results_rx = trio.open_memory_channel(200)
+
         async with results_tx, results_rx:
             for (address, msg) in address_msgs:
                 nursery.start_soon(
@@ -126,7 +122,7 @@ async def broadcast_requests(
     return results_by_addr
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Run a test socket server from this script
     import argparse
     import json
