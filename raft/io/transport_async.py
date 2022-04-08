@@ -78,48 +78,29 @@ async def client_send_msg(
     msg: bytes,
     result_chan: trio.abc.SendChannel,
     timeout: int = DEFAULT_REQUEST_TIMEOUT,
-) -> Optional[bytes]:
+) -> None:
     logger.debug(f"{CLIENT_LOG_NAME} connecting to {address[0]}:{address[1]}")
     with trio.move_on_after(timeout):
-        try:
-            client_stream = await trio.open_tcp_stream(address[0], address[1])
-            async with client_stream:
-                nursery.start_soon(send_message, client_stream, msg)
-                result = await receive_message(client_stream)
-                await result_chan.send((address, result))
-        except OSError:
-            logger.error(f"{CLIENT_LOG_NAME} Send FAIL {address[0]}:{address[1]}")
-
-
-async def client_send_success_reporter(
-    read_chan: trio.abc.ReceiveChannel,
-) -> Dict[Address, List[MsgResponse]]:
-    results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
-    async with read_chan:
-        async for (address, resp) in read_chan:
-            if address not in results_by_addr:
-                results_by_addr[address] = []
-            results_by_addr[address].append(resp)
-    return results_by_addr
-
-
-async def broadcast_requests(
-    address_msgs: List[Request], result_chan: Optional[trio.abc.SendChannel] = None, timeout: int = 1
-) -> Dict[Address, List[MsgResponse]]:
-    sender_with_timeout = partial(client_send_msg, timeout=timeout)
-
-    async with trio.open_nursery() as nursery:
-        if result_chan is None:
-            # This is a fire-and-forget case: the caller won't get anything back
-            results_tx, results_rx = trio.open_memory_channel(200)
-
-        async with results_tx, results_rx:
-            for (address, msg) in address_msgs:
-                nursery.start_soon(
-                    sender_with_timeout, nursery, address, msg, results_tx.clone()
+        async with result_chan:
+            try:
+                client_stream = await trio.open_tcp_stream(address[0], address[1])
+                async with client_stream:
+                    nursery.start_soon(send_message, client_stream, msg)
+                    result = await receive_message(client_stream)
+                    await result_chan.send(
+                        (
+                            address,
+                            {"succes": True, "answer": result, "original_message": msg},
+                        )
+                    )
+            except OSError:
+                logger.error(f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}")
+                await result_chan.send(
+                    (
+                        address,
+                        {"succes": False, "error": "OSError", "original_message": msg},
+                    )
                 )
-            results_by_addr = await client_send_success_reporter(results_rx)
-    return results_by_addr
 
 
 if __name__ == "__main__":  # pragma: no cover
