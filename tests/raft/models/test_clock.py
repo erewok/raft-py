@@ -17,7 +17,7 @@ def test_heartbeat():
         event_type=EventType.HeartbeatTime,
     )
     heartbeat.start()
-    time.sleep(1.6)
+    time.sleep(0.6)
     heartbeat.stop()
     all_events = []
     while True:
@@ -25,7 +25,7 @@ def test_heartbeat():
             all_events.append(events.get_nowait())
         except queue.Empty:
             break
-    assert len(all_events) == 15
+    assert len(all_events) == 5
     for item, next_item in zip(all_events, all_events[1:]):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime
@@ -50,9 +50,9 @@ async def test_async_heartbeat():
 
                 nursery.start_soon(heartbeat_collector, receive_channel.clone())
                 nursery.start_soon(heartbeat.start)
-                await trio.sleep(1.5)
+                await trio.sleep(0.5)
                 heartbeat.stop()
-    assert len(GLOBAL_ITEMS) == 15
+    assert len(GLOBAL_ITEMS) == 5
     for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime

@@ -16,10 +16,14 @@ root_dir = os.path.dirname(test_dir)
 
 @pytest.fixture()
 def config():
-    conf = configparser.ConfigParser()
+    _conf = configparser.ConfigParser()
     raft_ini = os.path.join(root_dir, "raft.ini")
-    conf.read(raft_ini)
-    return Config(conf)
+    _conf.read(raft_ini)
+    conf = Config(_conf)
+    conf.election_timeout = 1
+    conf.election_timeout_ms = 0.001
+    conf.heartbeat_timeout_ms = conf.election_timeout_ms / conf.heartbeat_interval
+    return conf
 
 
 @pytest.fixture()
