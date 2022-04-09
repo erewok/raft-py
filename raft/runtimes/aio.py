@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from raft.io import loggers  # noqa
+from raft.io import loggers
 from raft.io import transport_async
 from raft.internal import trio  # only present if extra "async" installed
 from raft.models import (
@@ -21,19 +21,22 @@ logger = logging.getLogger(__name__)
 
 class AsyncEventController(BaseEventController):
     """The job of this class is to package up 'things that happen'
-    into events (see `Event`). The msg queue goes to lower-level socket-listeners.
+    into events (see `Event`).
 
-    The `events` queue will be consumed by the runtime.
+    Lower-level socket-listeners provide inputs via a channel owned
+    by this class.
+
+    The inputs on this channel get transformed into `Events` which get sent to
+    the `Events` channel provided by the Runtime.
+
     _Some_ events have associated response messages but not all.
 
     For instance, an incoming RPC message is parsed and turned into an event.
 
     After it's been turned into an event, this class adds it to the `events`
-    queue.
+    channel.
 
-    It's sort of like MsgReceived-Q -> Events-Q -> Maybe Response-Q
-
-    Later on, someone may reply and we need to figure out what to do with those responses.
+    Later on, someone may reply and we need to send out those responses.
     """
 
     def __init__(
@@ -100,27 +103,26 @@ class AsyncEventController(BaseEventController):
         inbound_msg_chan: trio.abc.ReceiveChannel,
     ):
         """
-        Received Messages -> Events Queue
-
         Inbound messages get translated to events here: InboundMsg -> Event
 
-        After that, they are placed on the `events_chan`
+        After that, they are placed on the `events_chan`.
+
+        Received Messages -> Event -> Events Channel
         """
         logger.info(f"{self._log_name} Start: process inbound messages")
         async with inbound_msg_chan:
             async with events_channel:
-                while not self.command_event.is_set():
-                    async for item in inbound_msg_chan:
-                        event = await self.client_msg_into_event(item)
-                        if event:
-                            await events_channel.send(event)
-                            logger.info(
-                                (
-                                    f"{self._log_name} turned item {str(item)} into {event.type} event"
-                                )
+                async for item in inbound_msg_chan:
+                    event = await self.client_msg_into_event(item)
+                    if event:
+                        await events_channel.send(event)
+                        logger.info(
+                            (
+                                f"{self._log_name} turned item {str(item)} into {event.type} event"
                             )
-                        if self.command_event.is_set():
-                            break
+                        )
+                    if self.command_event.is_set():
+                        break
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
     async def send_outbound_msg(self, response: rpc.RPCMessage):
@@ -129,6 +131,7 @@ class AsyncEventController(BaseEventController):
         )
         results_tx, _ = trio.open_memory_channel(2)
         async with results_tx:
+            # We actually fire-and-forget: we don't read the response
             await transport_async.client_send_msg(
                 self.nursery, response.dest, response.to_bytes(), results_tx.clone()
             )
@@ -281,11 +284,10 @@ class AsyncRuntime(BaseRuntime):
     async def run_event_handler(self):
         logger.warn(f"{self.log_name}: event handler processing started")
         async with self.events_receive_channel:
-            while not self.command_event.is_set():
-                async for event in self.events_receive_channel:
-                    await self.handle_event(event)
-                    if self.command_event.is_set():
-                        break
+            async for event in self.events_receive_channel:
+                await self.handle_event(event)
+                if self.command_event.is_set():
+                    break
         logger.warn(f"{self.log_name} Stop: Shutting down primary event handler")
 
     async def run_async(self):

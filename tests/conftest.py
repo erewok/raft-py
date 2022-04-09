@@ -16,10 +16,14 @@ root_dir = os.path.dirname(test_dir)
 
 @pytest.fixture()
 def config():
-    conf = configparser.ConfigParser()
+    _conf = configparser.ConfigParser()
     raft_ini = os.path.join(root_dir, "raft.ini")
-    conf.read(raft_ini)
-    return Config(conf)
+    _conf.read(raft_ini)
+    conf = Config(_conf)
+    conf.election_timeout = 1
+    conf.election_timeout_ms = 0.001
+    conf.heartbeat_timeout_ms = conf.election_timeout_ms / conf.heartbeat_interval
+    return conf
 
 
 @pytest.fixture()
@@ -73,6 +77,20 @@ def fig7_sample_message():
             "leader_commit_index": 9,
             "dest": ("127.0.0.1", 3112),
             "source": ("127.0.0.1", 3111),
+        }
+    )
+
+
+@pytest.fixture
+def request_vote_message():
+    return rpc.RequestVoteRpc(
+        **{
+            "term": 8,
+            "candidate_id": 1,
+            "last_log_index": 10,
+            "last_log_term": 8,
+            "dest": ("127.0.0.1", 3111),
+            "source": ("127.0.0.1", 3112),
         }
     )
 

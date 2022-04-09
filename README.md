@@ -1,44 +1,105 @@
 # Raft In Python
 
-This is a work-in-progress attempt to implement Raft in Python.
+This is a work-in-progress attempt to implement Raft in Python. This codebase represents a personal exploration of the problem of Raft, so it's not intended as a model or complete implementation.
+
+Inspiration for this project has come from the original Raft paper. This project uses the following Python libraries:
+
+- `trio`
+- `rich`
 
 ## Running
 
-To run this using the provided `ini` file, you can invoke it using a node-id from 1 to 5:
+You can install dependencies with `poetry`:
+
+```sh
+$ poetry install
+```
+
+After that, to run this using the provided `ini` file, you can invoke it using a node-id from 1 to 5:
 
 ```sh
 $ python -m raft -c raft.ini -n 2
-2021-09-03 14:35:46:35.876 [WARNING] raft: *--- RaftNode is starting in DEBUG mode ---*
-2021-09-03 14:35:46:35.877 [WARNING] raft: *--- RaftNode will run in the foreground  ---*
-2021-09-03 14:35:46:35.877 [INFO] raft: *--- EventController Start: process inbound messages *---
-2021-09-03 14:35:46:35.877 [INFO] raft: *--- EventController Start: process outbound messages ---*
-2021-09-03 14:35:46:35.877 [WARNING] raft: *--- RaftNode Start: primary event handler ---*
-2021-09-03 14:35:46:35.877 [INFO] raft: *--- RaftNode Converting to [Follower] ---*
+[04/07/22 07:09:33] WARNING  [AsyncRuntime -     aio.py:312
+                             Follower] Starting
+                             up now
+                    INFO     [AsyncEventControll aio.py:113
+                             er] Start: process
+                             inbound messages
+                    WARNING  [AsyncRuntime -     aio.py:287
+                             Follower]: event
+                             handler processing
+                             started
+                    INFO     SocketSe transport_async.py:68
+                             rver
+                             Start: l
+                             istening
+                              at 127.
+                             0.0.1:31
+                             11
+                    INFO     [AsyncRuntime -     aio.py:242
+                             Follower]
+                             Converting to
+                             Follower
+                    INFO     [AsyncRuntime -     aio.py:223
+                             Follower] resetting
+                             election timer
+                    INFO     [AsyncRuntime -     aio.py:268
+                             Follower] Handling
+                             event: EventType=Co
+                             nversionToFollower
+                             MsgType=none
+                    INFO     [Clock.4439667616  clock.py:98
+                             - ElectionTimeoutS
+                             tartElection]
+                             starting up with
+                             interval 21.273
+^C[04/07/22 07:09:34] WARNING  SHUTTING DOWN   __main__.py:57
+                    WARNING  PLEASE WAIT FOR __main__.py:58
+                             FULL STOP
+                    WARNING  [AsyncRuntime -     aio.py:317
+                             Follower] Shutting
+                             down now
 ```
 
-You can simultaneously run raft nodes in other terminals. If you have enough for quorum, one of these will be elected leader:
+By default, the `AsyncRuntime` will be used, but there is also a `ThreadedRuntime` provided:
 
 ```sh
-2021-09-03 14:36:07:36.313 [WARNING] raft.models.server: Converting Server class from <class 'raft.models.server.Follower'> to <class 'raft.models.server.Candidate'>
-2021-09-03 14:36:07:36.313 [INFO] raft: *--- RaftNode Event OutboundMsg=4 ---*
-2021-09-03 14:36:07:36.313 [INFO] raft: *--- RaftNode Event FurtherEventCount=0 ---*
-2021-09-03 14:36:07:36.313 [INFO] raft: *--- RaftNode Handled event with qsize now 0 ---*
-2021-09-03 14:36:07:36.408 [INFO] raft: *--- EventController turned item b'{"term": 2, "vote_granted": true, "source_node_id": 2, "type": 2, "dest": ["127.0.0.1", 3111], "source": ["127.0.0.1", 3112]}' into ReceiveServerCandidateVote even with qsize now 1 ---*
-2021-09-03 14:36:07:36.409 [INFO] raft: *--- RaftNode Handling event: EventType=ReceiveServerCandidateVote MsgType=RequestVoteResponse ---*
-2021-09-03 14:36:07:36.409 [INFO] raft: *--- RaftNode Handled event with qsize now 0 ---*
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- RaftNode Handling event: EventType=ReceiveServerCandidateVote MsgType=RequestVoteResponse ---*
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- EventController turned item b'{"term": 2, "vote_granted": true, "source_node_id": 3, "type": 2, "dest": ["127.0.0.1", 3111], "source": ["127.0.0.1", 3113]}' into ReceiveServerCandidateVote even with qsize now 0 ---*
-2021-09-03 14:36:07:36.448 [INFO] raft.models.server: [Candidate] has received votes from a quorum of servers
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- RaftNode Event OutboundMsg=0 ---*
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- RaftNode Event FurtherEventCount=2 ---*
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- RaftNode Handled event with qsize now 2 ---*
-2021-09-03 14:36:07:36.448 [INFO] raft: *--- RaftNode Handling event: EventType=SelfWinElection MsgType=none ---*
-2021-09-03 14:36:07:36.448 [INFO] raft.models.server: [Candidate] has won the election
-2021-09-03 14:36:07:36.449 [WARNING] raft.models.server: Converting Server class from <class 'raft.models.server.Candidate'> to <class 'raft.models.server.Leader'>
-2021-09-03 14:36:07:36.449 [INFO] raft: *--- RaftNode Event OutboundMsg=0 ---*
-2021-09-03 14:36:07:36.449 [INFO] raft: *--- RaftNode Event FurtherEventCount=1 ---*
-2021-09-03 14:36:07:36.449 [INFO] raft: *--- RaftNode Converting to [Leader] ---*
+$ python -m raft -c raft.ini -n 2 -r ThreadedRuntime
+[04/07/22 07:11:23] WARNING  [ThreadedRuntime - Follower] is     threaded.py:293
+                             starting in DEBUG mode
+                    WARNING  [ThreadedRuntime - Follower] will   threaded.py:294
+                             run in the foreground
+                    INFO     [ThreadedEventController] Start:     threaded.py:84
+                             process inbound messages
+                    INFO     [ThreadedEventController] Start:    threaded.py:103
+                             process outbound messages
+                    WARNING  [ThreadedRuntime - Follower] Start: threaded.py:268
+                             primary event handler
+                    INFO     [ThreadedRuntime - Follower]        threaded.py:224
+                             Converting to Follower
+                    INFO     [ThreadedRuntime - Follower]        threaded.py:206
+                             resetting election timer
+                    INFO     [Clock.4403522688 -                     clock.py:53
+                             ElectionTimeoutStartElection] starting
+                             up with interval 12.245
+                    INFO     [ThreadedRuntime - Follower]        threaded.py:250
+                             Handling event:
+                             EventType=ConversionToFollower
+                             MsgType=none
+^C                    WARNING  SHUTTING DOWN                        __main__.py:57
+                    WARNING  PLEASE WAIT FOR FULL STOP            __main__.py:58
+                    INFO     [Clock.4403522688 -                     clock.py:57
+                             ElectionTimeoutStartElection] is
+                             shutting down
+                    INFO     [ThreadedEventController] Stop:     threaded.py:115
+                             process outbound messages
 ```
+
+**Note**: At this time the `AsyncRuntime` is better with resources and easier to shutdown, so it's preferred over the `ThreadedRuntime`.
+
+You can simultaneously run raft nodes in other terminals. If you have enough for quorum, one of these will be elected leader. Here's scree shot of five terminal sessions where a `Leader` is sending heartbeats to the other nodes in the cluster:
+
+![multi-node-terminal-session-screenshot](./raft-5-nodes-screenshot.png)
 
 To send requests into the cluster see the examples in [`shell.py`](./shell.py).
 
@@ -56,6 +117,18 @@ This codebase splits up the Raft protocol into a few important pieces
 
 This diagram may help:
 
-![](./Raft-Design.png)
+![raft-design-diagram](./Raft-Design.png)
 
 The event controller and event handler use queues or channels to coordinate behavior between the socket server and the clocks that a Raft node may need to run.
+
+## To Do
+
+This is a work-in-progress built for learning, so there are many things left to do:
+
+- Tests
+- Log Storage on Disk
+- Snapshot cluster state on Disk
+- More efficient message-serialization
+- Try other transports and messaging-patterns instead of raw sockets (ZeroMQ and/or fanout, for instance)
+- Allow nodes to join or leave cluster
+- Construct database or reuse existing

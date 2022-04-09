@@ -67,66 +67,43 @@ async def listen_server(address, send_channel: trio.abc.SendChannel):
         handler = partial(handle_socket_client, send_channel)
         logger.info(f"{SERVER_LOG_NAME} Start: listening at {address[0]}:{address[1]}")
         await trio.serve_tcp(handler, address[1])
-        logger.info(f"{SERVER_LOG_NAME} Stop: Listening at {address[0]}:{address[1]}")
 
 
 # # # # # # # # # # # # # # # # #
 # Socket Client functions
 # # # # # # # # # # # # # # # # #
-async def client_recv_msg(client_stream):
-    logger.debug(f"{CLIENT_LOG_NAME} receiving")
-    total = b""
-    async for data in client_stream:
-        total += data
-    return total
-
-
 async def client_send_msg(
     nursery,
     address: Address,
     msg: bytes,
     result_chan: trio.abc.SendChannel,
     timeout: int = DEFAULT_REQUEST_TIMEOUT,
-) -> Optional[bytes]:
+) -> None:
     logger.debug(f"{CLIENT_LOG_NAME} connecting to {address[0]}:{address[1]}")
     with trio.move_on_after(timeout):
-        try:
-            client_stream = await trio.open_tcp_stream(address[0], address[1])
-            async with client_stream:
-                nursery.start_soon(send_message, client_stream, msg)
-                result = await receive_message(client_stream)
-                await result_chan.send((address, result))
-        except OSError:
-            logger.error(f"{CLIENT_LOG_NAME} Send FAIL {address[0]}:{address[1]}")
-
-
-async def client_send_success_reporter(
-    read_chan: trio.abc.ReceiveChannel,
-) -> Dict[Address, MsgResponse]:
-    results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
-    async with read_chan:
-        async for (address, resp) in read_chan:
-            results_by_addr[address] = resp
-    return results_by_addr
-
-
-async def broadcast_requests(
-    address_msgs: List[Request], timeout: int = 1
-) -> Dict[Address, MsgResponse]:
-    sender_with_timeout = partial(client_send_msg, timeout=timeout)
-
-    async with trio.open_nursery() as nursery:
-        results_tx, results_rx = trio.open_memory_channel(40)
-        async with results_tx, results_rx:
-            for (address, msg) in address_msgs:
-                nursery.start_soon(
-                    sender_with_timeout, nursery, address, msg, results_tx.clone()
+        async with result_chan:
+            try:
+                client_stream = await trio.open_tcp_stream(address[0], address[1])
+                async with client_stream:
+                    nursery.start_soon(send_message, client_stream, msg)
+                    result = await receive_message(client_stream)
+                    await result_chan.send(
+                        (
+                            address,
+                            {"succes": True, "answer": result, "original_message": msg},
+                        )
+                    )
+            except OSError:
+                logger.error(f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}")
+                await result_chan.send(
+                    (
+                        address,
+                        {"succes": False, "error": "OSError", "original_message": msg},
+                    )
                 )
-            results_by_addr = await client_send_success_reporter(results_rx)
-    return results_by_addr
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Run a test socket server from this script
     import argparse
     import json
