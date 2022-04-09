@@ -73,7 +73,7 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
     async def run(self, events_channel: trio.abc.SendChannel):
-        (inbound_send_channel, inbound_read_channel,) = trio.open_memory_channel(100)
+        inbound_send_channel, inbound_read_channel = trio.open_memory_channel(100)
         async with inbound_send_channel, inbound_read_channel:
             self.nursery.start_soon(
                 transport_async.listen_server,
@@ -147,16 +147,16 @@ class AsyncEventController(BaseEventController):
                     event_type=EventType.HeartbeatTime,
                 )
                 self.cancel_scopes["heartbeat"] = cancel_scope
-                await self.heartbeat.start()
+            await self.heartbeat.start()
 
     def stop_heartbeat(self):
-        if cancel_scope := self.cancel_scopes.get("heartbeat"):
-            cancel_scope.cancel()
-            del self.cancel_scopes["heartbeat"]
-
         if self.heartbeat is not None:
             self.heartbeat.stop()
             self.heartbeat = None
+
+        if cancel_scope := self.cancel_scopes.get("heartbeat"):
+            cancel_scope.cancel()
+            del self.cancel_scopes["heartbeat"]
 
     async def run_election_timeout_timer(self, events_channel: trio.abc.SendChannel):
         """
@@ -173,15 +173,16 @@ class AsyncEventController(BaseEventController):
                     event_type=EventType.ElectionTimeoutStartElection,
                 )
                 self.cancel_scopes["election_timer"] = cancel_scope
-                await self.election_timer.start()
+            await self.election_timer.start()
 
     def stop_election_timer(self):
-        if cancel_scope := self.cancel_scopes.get("election_timer"):
-            cancel_scope.cancel()
-            del self.cancel_scopes["election_timer"]
         if self.election_timer is not None:
             self.election_timer.stop()
             self.election_timer = None
+
+        if cancel_scope := self.cancel_scopes.get("election_timer"):
+            cancel_scope.cancel()
+            del self.cancel_scopes["election_timer"]
 
 
 class AsyncRuntime(BaseRuntime):
