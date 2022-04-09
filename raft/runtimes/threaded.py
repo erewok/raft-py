@@ -116,24 +116,28 @@ class ThreadedEventController(BaseEventController):
 
     def run(self):
         # Launch request listener
-        threading.Thread(
+        self.listen_server = threading.Thread(
             target=transport.listen_server,
             args=(self.address, self.inbound_msg_queue),
             kwargs={"listen_server_event": self.command_event},
-        ).start()
+            daemon=True,
+        )
+        self.listen_server.start()
         # Launch inbound message processor
-        threading.Thread(target=self.process_inbound_msgs).start()
+        self.inbound_message_processor = threading.Thread(target=self.process_inbound_msgs, daemon=True)
+        self.inbound_message_processor.start()
         # Launch outbound message processor
-        threading.Thread(target=self.process_outbound_msgs).start()
+        self.outbound_message_processor = threading.Thread(target=self.process_outbound_msgs, daemon=True)
+        self.outbound_message_processor.start()
 
     def stop(self):
         self.stop_heartbeat()
         self.stop_election_timer()
         transport.client_send_msg(self.address, transport.SHUTDOWN_CMD, 5)
         self.command_event.set()
-        self.inbound_msg_queue.put(self.termination_sentinel)
-        self.outbound_msg_queue.put(self.termination_sentinel)
-        self.events.put(self.termination_sentinel)
+        self.inbound_msg_queue.put_nowait(self.termination_sentinel)
+        self.outbound_msg_queue.put_nowait(self.termination_sentinel)
+        self.events.put_nowait(self.termination_sentinel)
 
     def run_heartbeat(self):
         # self.stop_heartbeat()
@@ -149,6 +153,7 @@ class ThreadedEventController(BaseEventController):
     def stop_heartbeat(self):
         if self.heartbeat is not None:
             self.heartbeat.stop()
+            self.heartbeat = None
 
     def run_election_timeout_timer(self):
         self.stop_election_timer()
@@ -166,7 +171,7 @@ class ThreadedEventController(BaseEventController):
     def stop_election_timer(self):
         if self.election_timer is not None:
             self.election_timer.stop()
-        self.election_timer = None
+            self.election_timer = None
 
 
 class ThreadedRuntime(BaseRuntime):
@@ -271,6 +276,7 @@ class ThreadedRuntime(BaseRuntime):
                 break
             try:
                 event = self.event_controller.events.get_nowait()
+                self.event_controller.events.task_done()
             except queue.Empty:
                 continue
             if event is self.termination_sentinel:

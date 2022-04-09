@@ -52,12 +52,13 @@ class ThreadedClock:
         interval = self.interval_func() if self.interval_func else self.interval
         logger.info(f"{self._log_name} starting up with interval {interval}")
         while not self.command_event.wait(interval):
-            logger.debug(f"{self._log_name}")
+            logger.info(f"{self._log_name} tick")
             event_q.put(Event(self.event_type, None))
         logger.info(f"{self._log_name} is shutting down")
 
     def stop(self):
         self.command_event.set()
+        self.thread.join()
         self.thread = None
         self.command_event.clear()
 

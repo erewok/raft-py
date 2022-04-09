@@ -1,7 +1,6 @@
 from functools import partial
 import logging
 import traceback
-from typing import Dict, List, Optional
 
 from raft.internal import trio
 from raft.io import (
@@ -11,8 +10,6 @@ from raft.io import (
     CLIENT_LOG_NAME,
     SERVER_LOG_NAME,
     Address,
-    MsgResponse,
-    Request,
 )
 
 logger = logging.getLogger(__name__)

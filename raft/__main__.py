@@ -54,8 +54,7 @@ def main(node_id, config, runtime="AsyncRuntime"):
     try:
         node.run()
     except KeyboardInterrupt:
-        logger.warning("SHUTTING DOWN")
-        logger.warning("PLEASE WAIT FOR FULL STOP")
+        logger.warning("SHUTTING DOWN: PLEASE WAIT FOR FULL STOP")
         node.stop()
     sys.exit(0)
 

@@ -63,7 +63,7 @@ class AsyncEventController(BaseEventController):
         # messages inbound should be placed here
         self.inbound_send_channel: Optional[trio.abc.SendChannel] = None
         self.inbound_read_channel: Optional[trio.abc.ReadChannel] = None
-        self.cancel_scopes: dict[str, trio.Nursery] = {}
+        self.cancel_scopes: dict[str, trio.CancelScope] = {}
 
         self._log_name = f"[AsyncEventController]"
         if loggers.RICH_HANDLING_ON:
@@ -73,23 +73,32 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
     async def run(self, events_channel: trio.abc.SendChannel):
-        inbound_send_channel, inbound_read_channel = trio.open_memory_channel(100)
-        async with inbound_send_channel, inbound_read_channel:
-            self.nursery.start_soon(
-                transport_async.listen_server,
-                self.address,
-                inbound_send_channel.clone(),
-            )
-            await self.process_inbound_msgs(
-                events_channel.clone(), inbound_read_channel.clone()
-            )
+        with trio.CancelScope() as cancel_scope:
+            self.cancel_scopes["controller"] = cancel_scope
+
+            inbound_send_channel, inbound_read_channel = trio.open_memory_channel(100)
+            async with inbound_send_channel, inbound_read_channel:
+                self.nursery.start_soon(
+                    transport_async.listen_server,
+                    self.address,
+                    inbound_send_channel.clone(),
+                )
+
+                await self.process_inbound_msgs(
+                    events_channel, inbound_read_channel.clone()
+                )
 
     def stop(self):
         self.stop_election_timer()
         self.stop_heartbeat()
+
+        if cancel_controller := self.cancel_scopes.get("controller"):
+            logger.info(f"{self._log_name} Shutting down")
+            cancel_controller.cancel()
+
         self.command_event.set()
 
-    async def client_msg_into_event(self, msg: bytes):
+    def client_msg_into_event(self, msg: bytes):
         """Inbound Message -> Events Queue"""
         event = parse_msg_to_event(msg)
         if event is not None:
@@ -113,8 +122,7 @@ class AsyncEventController(BaseEventController):
         async with inbound_msg_chan:
             async with events_channel:
                 async for item in inbound_msg_chan:
-                    event = await self.client_msg_into_event(item)
-                    if event:
+                    if event := self.client_msg_into_event(item):
                         await events_channel.send(event)
                         logger.info(
                             (
@@ -311,5 +319,6 @@ class AsyncRuntime(BaseRuntime):
         trio.run(self.run_async)
 
     def stop(self):
+        self.event_controller.stop()
         self.command_event.set()
-        logger.warn(f"{self.log_name} Shutting down now")
+        logger.warn(f"{self.log_name} Shutting down")
