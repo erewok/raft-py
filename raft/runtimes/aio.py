@@ -103,7 +103,6 @@ class AsyncEventController(BaseEventController):
         inbound_msg_chan: trio.abc.ReceiveChannel,
     ):
         """
-
         Inbound messages get translated to events here: InboundMsg -> Event
 
         After that, they are placed on the `events_chan`.

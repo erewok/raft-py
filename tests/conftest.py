@@ -81,6 +81,20 @@ def fig7_sample_message():
     )
 
 
+@pytest.fixture
+def request_vote_message():
+    return rpc.RequestVoteRpc(
+        **{
+            "term": 8,
+            "candidate_id": 1,
+            "last_log_index": 10,
+            "last_log_term": 8,
+            "dest": ("127.0.0.1", 3111),
+            "source": ("127.0.0.1", 3112),
+        }
+    )
+
+
 @pytest.fixture()
 def candidate(config, storage):
     return server.Candidate(1, config, storage)

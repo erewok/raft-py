@@ -45,8 +45,10 @@ async def test_runstop_heartbeat(controller):
             await trio.sleep(0.1)
             assert controller.cancel_scopes.get("heartbeat")
             controller.stop_heartbeat()
+    assert controller.heartbeat is None
+    assert not ("heartbeat" in controller.cancel_scopes)
     # Imperfect
-    assert len(GLOBAL_ITEMS) > 30
+    assert len(GLOBAL_ITEMS) >= 4
     for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime
@@ -54,6 +56,7 @@ async def test_runstop_heartbeat(controller):
 
 async def test_runstop_election_timeout_timer(controller):
     async with trio.open_nursery() as nursery:
+        controller.set_nursery(nursery)
         send_channel, receive_channel = trio.open_memory_channel(40)
         async with send_channel, receive_channel:
             nursery.start_soon(channel_collector, receive_channel.clone())
@@ -61,8 +64,34 @@ async def test_runstop_election_timeout_timer(controller):
             await trio.sleep(0.1)
             assert controller.cancel_scopes.get("election_timer")
             controller.stop_election_timer()
-    # Median should be half what heartbeat is
-    assert len(GLOBAL_ITEMS) >= 15
+    assert controller.election_timer is None
+    assert not ("election_timer" in controller.cancel_scopes)
+
+    assert len(GLOBAL_ITEMS) >= 4
+    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
+        assert item == next_item
+        assert item.type == EventType.ElectionTimeoutStartElection
+
+
+async def test_runstop_controller(controller, fig7_sample_message, request_vote_message):
+    fig7_sample_message.dest = controller.address
+    async with trio.open_nursery() as nursery:
+        with trio.fail_after(2):
+            controller.set_nursery(nursery)
+            send_channel, receive_channel = trio.open_memory_channel(100)
+            async with send_channel, receive_channel:
+                nursery.start_soon(
+                    controller.run, send_channel
+                )
+                await trio.sleep(0.2)
+                nursery.start_soon(channel_collector, receive_channel)
+                nursery.start_soon(controller.send_outbound_msg, fig7_sample_message)
+                nursery.start_soon(controller.send_outbound_msg, request_vote_message)
+                await trio.sleep(0.2)
+                controller.stop()
+
+    assert len(GLOBAL_ITEMS) == 4
+    # Should be a mixture of heartbeats, and a logappend and a request vote
     for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
         assert item == next_item
         assert item.type == EventType.ElectionTimeoutStartElection
