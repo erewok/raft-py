@@ -290,13 +290,12 @@ class AsyncRuntime(BaseRuntime):
                 self.nursery.start_soon(self.events_send_channel.send, further_event)
 
     async def run_event_handler(self):
-        logger.warn(f"{self.log_name}: event handler processing started")
+        logger.warning(f"{self.log_name}: event handler processing started")
         async with self.events_receive_channel:
             async for event in self.events_receive_channel:
                 await self.handle_event(event)
                 if self.command_event.is_set():
                     break
-        logger.warn(f"{self.log_name} Stop: Shutting down primary event handler")
 
     async def run_async(self):
         async with trio.open_nursery() as nursery:
@@ -314,11 +313,11 @@ class AsyncRuntime(BaseRuntime):
                 await self.run_event_handler()
 
     def run(self):
-        logger.warn(f"{self.log_name} Starting up now")
+        logger.warning(f"{self.log_name} Starting up now")
         trio.run(self.run_async)
 
     def stop(self):
         self.command_event.set()
         self.event_controller.stop()
         self.nursery.cancel_scope.cancel()
-        logger.warn(f"{self.log_name} Shutting down")
+        logger.warning(f"{self.log_name} Shutting down")

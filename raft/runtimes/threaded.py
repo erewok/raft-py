@@ -270,7 +270,7 @@ class ThreadedRuntime(BaseRuntime):
                 self.event_controller.events.put(further_event)
 
     def run_event_handler(self):
-        logger.warn(f"{self.log_name} Start: primary event handler")
+        logger.warning(f"{self.log_name} Start: primary event handler")
         while True:
             if not self.command_q.empty():
                 break
@@ -291,13 +291,13 @@ class ThreadedRuntime(BaseRuntime):
                     f"{self.event_controller.events.qsize()}"
                 )
             )
-        logger.warn(f"{self.log_name} Stop: Shutting down primary event handler")
+        logger.warning(f"{self.log_name} Stop: Shutting down primary event handler")
 
     def run(self, foreground=True):
         if self.debug:
             fg_or_bg = "foreground" if foreground else "background"
-            logger.warn(f"{self.log_name} is starting in DEBUG mode")
-            logger.warn(f"{self.log_name} will run in the {fg_or_bg} ")
+            logger.warning(f"{self.log_name} is starting in DEBUG mode")
+            logger.warning(f"{self.log_name} will run in the {fg_or_bg} ")
 
         # Trigger event that makes it so that the correct timers start/stop
         self.event_controller.run()

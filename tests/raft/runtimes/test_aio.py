@@ -71,7 +71,7 @@ async def test_runstop_election_timeout_timer(controller):
         assert item.type == EventType.ElectionTimeoutStartElection
 
 
-async def test_runstop_controller(controller, fig7_sample_message, request_vote_message, debug_msg):
+async def test_runstop_controller_with_some_events(controller, fig7_sample_message, request_vote_message, debug_msg):
     fig7_sample_message.dest = controller.address
     request_vote_message.dest = controller.address
     debug_msg.dest = controller.address
@@ -100,6 +100,22 @@ async def test_runstop_controller(controller, fig7_sample_message, request_vote_
     # IT's supposed to explicitly clobber only in this case
     assert third.msg.source == controller.address
 
+
 # # # # # # # # # # # # # # # # #
 # AsyncRuntime Tests
 # # # # # # # # # # # # # # # # #
+
+async def test_runstop_runtime_with_some_events(runner, fig7_sample_message, request_vote_message, debug_msg):
+    fig7_sample_message.dest = runner.event_controller.address
+    request_vote_message.dest = runner.event_controller.address
+    debug_msg.dest = runner.event_controller.address
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(runner.run_async)
+        await trio.sleep(0.3)
+
+        await runner.event_controller.send_outbound_msg(fig7_sample_message)
+        await runner.event_controller.send_outbound_msg(request_vote_message)
+        await runner.event_controller.send_outbound_msg(debug_msg)
+        await trio.sleep(0.2)
+        runner.stop()
+        nursery.cancel_scope.cancel()
