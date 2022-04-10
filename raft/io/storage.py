@@ -1,12 +1,11 @@
-from abc import abstractmethod
 import logging
 import os
 import time
+from abc import abstractmethod
 from typing import Any, Dict, List
 
 from raft.internal import trio
 from raft.models.config import Config
-
 
 logger = logging.getLogger("raft.io.storage")
 

@@ -1,10 +1,9 @@
 import queue
 import time
+
 import trio
 
-from raft.models import clock
-from raft.models import EventType
-
+from raft.models import EventType, clock
 
 GLOBAL_ITEMS = []
 

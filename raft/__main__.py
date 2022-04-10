@@ -8,7 +8,6 @@ from .io import loggers  # noqa
 from .io import storage
 from .models.config import Config
 
-
 logger = logging.getLogger("raft")
 
 

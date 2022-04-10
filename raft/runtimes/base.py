@@ -1,6 +1,5 @@
 from raft.models import EventType
 
-
 RUNTIME_EVENTS = set(
     (
         EventType.DEBUG_REQUEST,

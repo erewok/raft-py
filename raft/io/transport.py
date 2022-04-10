@@ -6,17 +6,16 @@ from threading import Event
 from typing import Dict, List, Optional
 
 from raft.io import (
+    CLIENT_LOG_NAME,
     DEFAULT_MSG_LEN,
     DEFAULT_REQUEST_TIMEOUT,
     HEADER_LEN,
-    CLIENT_LOG_NAME,
     SERVER_LOG_NAME,
     SHUTDOWN_CMD,
     Address,
     MsgResponse,
     Request,
 )
-
 
 logger = logging.getLogger(__name__)
 

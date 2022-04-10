@@ -12,8 +12,8 @@ from raft.models import (
 from raft.models.clock import ThreadedClock
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
-from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
+from .base import RUNTIME_EVENTS, BaseEventController, BaseRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +124,14 @@ class ThreadedEventController(BaseEventController):
         )
         self.listen_server.start()
         # Launch inbound message processor
-        self.inbound_message_processor = threading.Thread(target=self.process_inbound_msgs, daemon=True)
+        self.inbound_message_processor = threading.Thread(
+            target=self.process_inbound_msgs, daemon=True
+        )
         self.inbound_message_processor.start()
         # Launch outbound message processor
-        self.outbound_message_processor = threading.Thread(target=self.process_outbound_msgs, daemon=True)
+        self.outbound_message_processor = threading.Thread(
+            target=self.process_outbound_msgs, daemon=True
+        )
         self.outbound_message_processor.start()
 
     def stop(self):

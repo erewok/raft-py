@@ -1,20 +1,20 @@
 import logging
 from typing import Optional
 
-from raft.io import loggers
-from raft.io import transport_async
 from raft.internal import trio  # only present if extra "async" installed
+from raft.io import loggers, transport_async
 from raft.models import (
     EVENT_CONVERSION_TO_FOLLOWER,
     Event,
     EventType,
+    clock,
     parse_msg_to_event,
+    rpc,
 )
-from raft.models import clock, rpc
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
-from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
+from .base import RUNTIME_EVENTS, BaseEventController, BaseRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ class AsyncRuntime(BaseRuntime):
         logger.info(f"{self.log_name} resetting election timer")
         self.nursery.start_soon(
             self.event_controller.run_election_timeout_timer,
-            self.events_send_channel.clone()
+            self.events_send_channel.clone(),
         )
 
     async def handle_start_heartbeat(self, _: Event):

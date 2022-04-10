@@ -1,7 +1,7 @@
 import enum
 from typing import Any, Optional
 
-from .rpc import parse_msg, MsgType
+from .rpc import MsgType, parse_msg
 
 # Next == /\ \/ \E i \in Server : Restart(i)
 #            \/ \E i \in Server : Timeout(i)

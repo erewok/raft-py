@@ -1,10 +1,9 @@
 from __future__ import nested_scopes
+
 import pytest
 
 from raft import models
-from raft.models import Event, EventType
-from raft.models import rpc
-from raft.models import server
+from raft.models import Event, EventType, rpc, server
 
 
 @pytest.fixture

@@ -4,7 +4,6 @@ import pytest
 
 from raft.models import rpc
 
-
 TYPICAL_SOURCE_DEST = {"dest": ("127.0.0.1", 3112), "source": ("127.0.0.1", 3111)}
 
 

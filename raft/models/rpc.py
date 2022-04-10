@@ -52,7 +52,11 @@ def parse_msg(msg_bytes: bytes):
 class Debug(Generic[RPC]):
     __slots__ = ["type", "dest", "source", "term"]
 
-    def __init__(self, dest: Optional[transport.Address] = None, source: Optional[transport.Address] = None):
+    def __init__(
+        self,
+        dest: Optional[transport.Address] = None,
+        source: Optional[transport.Address] = None,
+    ):
         self.type = MsgType.DEBUG_MESSAGE
         self.dest = dest
         self.source = source

@@ -3,10 +3,10 @@ import queue
 import threading
 from typing import Callable
 
-from raft.io import loggers
 from raft.internal import trio  # only present if extra "async" installed
-from . import Event, EventType
+from raft.io import loggers
 
+from . import Event, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,9 @@ class ThreadedClock:
         self.thread = None
         self._log_name = f"[Clock.{id(self)} - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
+            self._log_name = (
+                f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
+            )
 
     def start(self):
         if self.thread is None:
@@ -89,7 +91,9 @@ class AsyncClock:
         self.command_event: trio.Event = trio.Event()
         self._log_name = f"[Clock.{id(self)} - {str(self.event_type)}]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
+            self._log_name = (
+                f"[[yellow]Clock[/].{id(self)} - [blue]{str(self.event_type)}[/]]"
+            )
 
     async def start(self):
         await self.generate_ticks(self.send_channel)

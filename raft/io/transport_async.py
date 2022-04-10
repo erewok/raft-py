@@ -1,13 +1,13 @@
-from functools import partial
 import logging
 import traceback
+from functools import partial
 
 from raft.internal import trio
 from raft.io import (
+    CLIENT_LOG_NAME,
     DEFAULT_MSG_LEN,
     DEFAULT_REQUEST_TIMEOUT,
     HEADER_LEN,
-    CLIENT_LOG_NAME,
     SERVER_LOG_NAME,
     Address,
 )
@@ -91,7 +91,9 @@ async def client_send_msg(
                         )
                     )
             except OSError:
-                logger.error(f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}")
+                logger.error(
+                    f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}"
+                )
                 await result_chan.send(
                     (
                         address,

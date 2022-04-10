@@ -5,25 +5,17 @@ from raft.io import storage
 from raft.models import EventType, MsgType
 from raft.runtimes import aio
 
-
 GLOBAL_ITEMS = []
 
 
 @pytest.fixture()
 def controller(config):
-    return aio.AsyncEventController(
-        1,
-        config
-    )
+    return aio.AsyncEventController(1, config)
 
 
 @pytest.fixture()
 def runner(config):
-    return aio.AsyncRuntime(
-        1,
-        config,
-        storage.AsyncFileStorage
-    )
+    return aio.AsyncRuntime(1, config, storage.AsyncFileStorage)
 
 
 async def channel_collector(receive_channel: trio.abc.ReceiveChannel):
@@ -71,7 +63,9 @@ async def test_runstop_election_timeout_timer(controller):
         assert item.type == EventType.ElectionTimeoutStartElection
 
 
-async def test_runstop_controller_with_some_events(controller, fig7_sample_message, request_vote_message, debug_msg):
+async def test_runstop_controller_with_some_events(
+    controller, fig7_sample_message, request_vote_message, debug_msg
+):
     fig7_sample_message.dest = controller.address
     request_vote_message.dest = controller.address
     debug_msg.dest = controller.address
@@ -105,7 +99,10 @@ async def test_runstop_controller_with_some_events(controller, fig7_sample_messa
 # AsyncRuntime Tests
 # # # # # # # # # # # # # # # # #
 
-async def test_runstop_runtime_with_some_events(runner, fig7_sample_message, request_vote_message, debug_msg):
+
+async def test_runstop_runtime_with_some_events(
+    runner, fig7_sample_message, request_vote_message, debug_msg
+):
     fig7_sample_message.dest = runner.event_controller.address
     request_vote_message.dest = runner.event_controller.address
     debug_msg.dest = runner.event_controller.address
