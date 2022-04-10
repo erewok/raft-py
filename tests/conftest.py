@@ -118,3 +118,8 @@ def leader(config, storage, fig7_leader_log):
 @pytest.fixture()
 def sample_append_confirm_rpc():
     return rpc.AppendEntriesResponse(1, 1, 1, True)
+
+
+@pytest.fixture()
+def debug_msg():
+    return rpc.Debug()

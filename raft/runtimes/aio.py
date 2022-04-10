@@ -73,11 +73,10 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
     async def run(self, events_channel: trio.abc.SendChannel):
-        with trio.CancelScope() as cancel_scope:
-            self.cancel_scopes["controller"] = cancel_scope
-
+        async with trio.open_nursery() as inner_nursery:
             inbound_send_channel, inbound_read_channel = trio.open_memory_channel(100)
             async with inbound_send_channel, inbound_read_channel:
+                self.cancel_scopes["controller"] = inner_nursery.cancel_scope
                 self.nursery.start_soon(
                     transport_async.listen_server,
                     self.address,
@@ -104,6 +103,7 @@ class AsyncEventController(BaseEventController):
         if event is not None:
             if event.type == EventType.DEBUG_REQUEST:
                 event.msg.source = self.address
+                event.msg.dest = self.address
         return event
 
     async def process_inbound_msgs(
@@ -131,7 +131,6 @@ class AsyncEventController(BaseEventController):
                         )
                     if self.command_event.is_set():
                         break
-        logger.info(f"{self._log_name} Stop: process inbound messages")
 
     async def send_outbound_msg(self, response: rpc.RPCMessage):
         logger.info(
@@ -319,6 +318,7 @@ class AsyncRuntime(BaseRuntime):
         trio.run(self.run_async)
 
     def stop(self):
-        self.event_controller.stop()
         self.command_event.set()
+        self.event_controller.stop()
+        self.nursery.cancel_scope.cancel()
         logger.warn(f"{self.log_name} Shutting down")

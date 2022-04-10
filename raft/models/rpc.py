@@ -50,12 +50,16 @@ def parse_msg(msg_bytes: bytes):
 
 
 class Debug(Generic[RPC]):
-    __slots__ = ["type", "source", "term"]
+    __slots__ = ["type", "dest", "source", "term"]
 
-    def __init__(self, source=None):
+    def __init__(self, dest: Optional[transport.Address] = None, source: Optional[transport.Address] = None):
         self.type = MsgType.DEBUG_MESSAGE
+        self.dest = dest
         self.source = source
         self.term = -99
+
+    def to_bytes(self) -> bytes:
+        return b'{"type": 99}'
 
 
 class ClientRequest(Generic[RPC]):
