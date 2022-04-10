@@ -77,7 +77,7 @@ class AsyncEventController(BaseEventController):
             inbound_send_channel, inbound_read_channel = trio.open_memory_channel(100)
             async with inbound_send_channel, inbound_read_channel:
                 self.cancel_scopes["controller"] = inner_nursery.cancel_scope
-                self.nursery.start_soon(
+                inner_nursery.start_soon(
                     transport_async.listen_server,
                     self.address,
                     inbound_send_channel.clone(),
