@@ -97,13 +97,12 @@ class AsyncEventController(BaseEventController):
 
         self.command_event.set()
 
-    def client_msg_into_event(self, msg: bytes):
-        """Inbound Message -> Events Queue"""
+    def client_msg_into_event(self, msg: bytes) -> Optional[Event]:
+        """Inbound Message -> Event"""
         event = parse_msg_to_event(msg)
-        if event is not None:
-            if event.type == EventType.DEBUG_REQUEST:
-                event.msg.source = self.address
-                event.msg.dest = self.address
+        if event is not None and event.type == EventType.DEBUG_REQUEST:
+            event.msg.source = self.address
+            event.msg.dest = self.address
         return event
 
     async def process_inbound_msgs(
@@ -114,7 +113,7 @@ class AsyncEventController(BaseEventController):
         """
         Inbound messages get translated to events here: InboundMsg -> Event
 
-        After that, they are placed on the `events_chan`.
+        After that, they are placed on the `events_channel`.
 
         Received Messages -> Event -> Events Channel
         """
@@ -144,7 +143,11 @@ class AsyncEventController(BaseEventController):
             )
 
     async def run_heartbeat(self, events_channel: trio.abc.SendChannel):
-        # Start Heartbeat timer (only leader should use this...)
+        """
+        Start Heartbeat timer.
+
+        Only Leaders should use this.
+        """
         self.stop_heartbeat()
         with trio.CancelScope() as cancel_scope:
             if self.heartbeat is None:
@@ -153,7 +156,7 @@ class AsyncEventController(BaseEventController):
                     interval=self.heartbeat_timeout_ms,
                     event_type=EventType.HeartbeatTime,
                 )
-                self.cancel_scopes["heartbeat"] = cancel_scope
+            self.cancel_scopes["heartbeat"] = cancel_scope
             await self.heartbeat.start()
 
     def stop_heartbeat(self):
@@ -179,7 +182,7 @@ class AsyncEventController(BaseEventController):
                     interval_func=self.get_election_time,
                     event_type=EventType.ElectionTimeoutStartElection,
                 )
-                self.cancel_scopes["election_timer"] = cancel_scope
+            self.cancel_scopes["election_timer"] = cancel_scope
             await self.election_timer.start()
 
     def stop_election_timer(self):
@@ -255,8 +258,8 @@ class AsyncRuntime(BaseRuntime):
             await self.handle_start_heartbeat(event)
 
     def drop_event(self, event):
-        if event.type == EventType.HeartbeatTime and isinstance(
-            self.instance, Follower
+        if event.type == EventType.HeartbeatTime and not isinstance(
+            self.instance, Leader
         ):
             return True
         return False
