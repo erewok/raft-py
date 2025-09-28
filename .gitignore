@@ -128,4 +128,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-.vscode/
+
+# This project customizations
+tmp/
+todo.md
+*IMPLEMENTATION*
