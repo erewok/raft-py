@@ -1,12 +1,11 @@
 import json
 import traceback
-import typing
-from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, socket, SOL_SOCKET
 
 from .parser import Command, parse
 from .transport import receive_message, send_message
 
-DATA_STORE: typing.Dict[str, str] = {}
+DATA_STORE: dict[str, str] = {}
 
 
 def evaluate_json(msg: bytes) -> str:

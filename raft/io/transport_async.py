@@ -4,12 +4,12 @@ from functools import partial
 
 from raft.internal import trio
 from raft.io import (
+    Address,
     CLIENT_LOG_NAME,
     DEFAULT_MSG_LEN,
     DEFAULT_REQUEST_TIMEOUT,
     HEADER_LEN,
     SERVER_LOG_NAME,
-    Address,
 )
 
 logger = logging.getLogger(__name__)

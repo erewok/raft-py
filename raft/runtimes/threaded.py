@@ -4,8 +4,8 @@ import threading
 
 from raft.io import loggers, transport
 from raft.models import (
-    EVENT_CONVERSION_TO_FOLLOWER,
     Event,
+    EVENT_CONVERSION_TO_FOLLOWER,
     EventType,
     parse_msg_to_event,
 )
@@ -13,7 +13,7 @@ from raft.models.clock import ThreadedClock
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
 
-from .base import RUNTIME_EVENTS, BaseEventController, BaseRuntime
+from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,9 @@ class ThreadedEventController(BaseEventController):
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
 
-        self._log_name = f"[EventController]"
+        self._log_name = "[EventController]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[bright_cyan]ThreadedEventController[/]]"
+            self._log_name = "[[bright_cyan]ThreadedEventController[/]]"
 
     def add_response_to_queue(self, msg):
         try:
@@ -92,10 +92,10 @@ class ThreadedEventController(BaseEventController):
             event = self.client_msg_into_event(item)
             event_type = event.type if event is not None else "none"
             logger.info(
-                (
+
                     f"{self._log_name} turned item {str(item)} "
                     f"into {event_type} even with qsize now {self.events.qsize()}"
-                )
+
             )
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
@@ -290,10 +290,10 @@ class ThreadedRuntime(BaseRuntime):
 
             self.handle_event(event)
             logger.debug(
-                (
+
                     f"{self.log_name} Handled event with qsize now "
                     f"{self.event_controller.events.qsize()}"
-                )
+
             )
         logger.warning(f"{self.log_name} Stop: Shutting down primary event handler")
 

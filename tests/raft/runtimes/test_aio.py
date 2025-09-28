@@ -37,10 +37,10 @@ async def test_runstop_heartbeat(controller):
         assert controller.cancel_scopes.get("heartbeat")
         controller.stop_heartbeat()
     assert controller.heartbeat is None
-    assert not ("heartbeat" in controller.cancel_scopes)
+    assert "heartbeat" not in controller.cancel_scopes
     # Imperfect
     assert len(GLOBAL_ITEMS) >= 4
-    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
+    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:], strict=False):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime
 
@@ -55,10 +55,10 @@ async def test_runstop_election_timeout_timer(controller):
         assert controller.cancel_scopes.get("election_timer")
         controller.stop_election_timer()
     assert controller.election_timer is None
-    assert not ("election_timer" in controller.cancel_scopes)
+    assert "election_timer" not in controller.cancel_scopes
 
     assert len(GLOBAL_ITEMS) >= 4
-    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
+    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:], strict=False):
         assert item == next_item
         assert item.type == EventType.ElectionTimeoutStartElection
 

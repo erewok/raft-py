@@ -1,7 +1,7 @@
 import configparser
 import logging
 import random
-from functools import cached_property, partial
+from functools import cached_property
 
 logger = logging.getLogger(__name__)
 

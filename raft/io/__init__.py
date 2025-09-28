@@ -6,9 +6,9 @@ HEADER_LEN = 10
 DEFAULT_MSG_LEN = 4096
 DEFAULT_REQUEST_TIMEOUT = 10
 LISTENER_SERVER_CLIENT_TTL = 120  # 2 minutes
-Address = Tuple[str, int]
+Address = tuple[str, int]
 MsgResponse = Optional[bytes]
-Request = Tuple[Address, bytes]
+Request = tuple[Address, bytes]
 SHUTDOWN_CMD = b"SHUTDOWN"
 
 SERVER_LOG_NAME = "SocketServer"

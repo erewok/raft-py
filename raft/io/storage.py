@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from abc import abstractmethod
-from typing import Any, Dict, List
+from typing import Any
 
 from raft.internal import trio
 from raft.models.config import Config
@@ -22,8 +22,8 @@ class BaseStorage:
 
 class InMemoryStorage(BaseStorage):
     def __init__(self, node_id: int, _: Config):
-        self.log: List[bytes] = []
-        self.metadata: Dict[str, Any] = {"node_id": node_id}
+        self.log: list[bytes] = []
+        self.metadata: dict[str, Any] = {"node_id": node_id}
 
     def save_metadata(self, value: bytes):
         self.metadata["stored"] = value
@@ -54,7 +54,7 @@ class FileStorage(BaseStorage):
         max_file = max(sorted(os.listdir(maxdir_abspath)))
         max_file_abspath = os.path.join(maxdir_abspath, max_file)
         with open(max_file_abspath, "rb") as fl:
-            line_count = sum((1 for _ in fl))
+            line_count = sum(1 for _ in fl)
 
         self.stored_item_count = int(f"{maxdir}{max_file}{line_count:03}")
 

@@ -1,6 +1,5 @@
 import enum
 import logging
-from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,11 @@ class Command(enum.IntEnum):
         return f"Command.{self.name}"
 
 
-def tokenizer(msg: str) -> List[str]:
+def tokenizer(msg: str) -> list[str]:
     return list(filter(bool, msg.split(" ")))
 
 
-def parse(msg: str) -> Optional[Tuple[Command, List[str]]]:
+def parse(msg: str) -> tuple[Command, list[str]] | None:
     tokens = tokenizer(msg)
     if len(tokens) < 2:
         return None

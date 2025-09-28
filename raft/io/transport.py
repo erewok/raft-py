@@ -1,20 +1,19 @@
 import concurrent.futures
 import logging
 import traceback
-from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, socket
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, socket, SOL_SOCKET
 from threading import Event
-from typing import Dict, List, Optional
 
 from raft.io import (
+    Address,
     CLIENT_LOG_NAME,
     DEFAULT_MSG_LEN,
     DEFAULT_REQUEST_TIMEOUT,
     HEADER_LEN,
-    SERVER_LOG_NAME,
-    SHUTDOWN_CMD,
-    Address,
     MsgResponse,
     Request,
+    SERVER_LOG_NAME,
+    SHUTDOWN_CMD,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +71,7 @@ def handle_socket_client(client, addr, msg_queue):
     return msg
 
 
-def listen_server(address, msg_queue, listen_server_event: Optional[Event] = None):
+def listen_server(address, msg_queue, listen_server_event: Event | None = None):
     with socket(AF_INET, SOCK_STREAM) as sock:
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, True)
         sock.bind(address)
@@ -94,7 +93,7 @@ def listen_server(address, msg_queue, listen_server_event: Optional[Event] = Non
 # # # # # # # # # # # # # # # # #
 def client_send_msg(
     address: Address, msg: bytes, timeout: int = DEFAULT_REQUEST_TIMEOUT
-) -> Optional[bytes]:
+) -> bytes | None:
     with socket(AF_INET, SOCK_STREAM) as sock:
         old_timeout = sock.gettimeout()
         sock.settimeout(timeout)
@@ -111,9 +110,9 @@ def client_send_msg(
 
 
 def broadcast_requests(
-    address_msgs: List[Request], timeout: int = 1
-) -> Dict[Address, MsgResponse]:
-    results_by_addr: Dict[Address, MsgResponse] = {}  # addr -> bytes result
+    address_msgs: list[Request], timeout: int = 1
+) -> dict[Address, MsgResponse]:
+    results_by_addr: dict[Address, MsgResponse] = {}  # addr -> bytes result
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         request_rpcs = {
             executor.submit(client_send_msg, addr, msg, timeout): addr

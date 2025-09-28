@@ -1,20 +1,19 @@
 import logging
-from typing import Optional
 
 from raft.internal import trio  # only present if extra "async" installed
 from raft.io import loggers, transport_async
 from raft.models import (
-    EVENT_CONVERSION_TO_FOLLOWER,
-    Event,
-    EventType,
     clock,
+    Event,
+    EVENT_CONVERSION_TO_FOLLOWER,
+    EventType,
     parse_msg_to_event,
     rpc,
 )
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
 
-from .base import RUNTIME_EVENTS, BaseEventController, BaseRuntime
+from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +42,8 @@ class AsyncEventController(BaseEventController):
         self,
         node_id,
         config,
-        nursery: Optional[trio.Nursery] = None,
-        command_event: Optional[trio.Event] = None,
+        nursery: trio.Nursery | None = None,
+        command_event: trio.Event | None = None,
     ):
         self.node_id = node_id
         self.debug = config.debug
@@ -61,13 +60,13 @@ class AsyncEventController(BaseEventController):
             command_event if command_event else trio.Event()
         )
         # messages inbound should be placed here
-        self.inbound_send_channel: Optional[trio.abc.SendChannel] = None
-        self.inbound_read_channel: Optional[trio.abc.ReadChannel] = None
+        self.inbound_send_channel: trio.abc.SendChannel | None = None
+        self.inbound_read_channel: trio.abc.ReadChannel | None = None
         self.cancel_scopes: dict[str, trio.CancelScope] = {}
 
-        self._log_name = f"[AsyncEventController]"
+        self._log_name = "[AsyncEventController]"
         if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[bright_cyan]AsyncEventController[/]]"
+            self._log_name = "[[bright_cyan]AsyncEventController[/]]"
 
     def set_nursery(self, nursery: trio.Nursery):
         self.nursery = nursery
@@ -97,7 +96,7 @@ class AsyncEventController(BaseEventController):
 
         self.command_event.set()
 
-    def client_msg_into_event(self, msg: bytes) -> Optional[Event]:
+    def client_msg_into_event(self, msg: bytes) -> Event | None:
         """Inbound Message -> Event"""
         event = parse_msg_to_event(msg)
         if event is not None and event.type == EventType.DEBUG_REQUEST:
@@ -124,9 +123,9 @@ class AsyncEventController(BaseEventController):
                     if event := self.client_msg_into_event(item):
                         await events_channel.send(event)
                         logger.info(
-                            (
+
                                 f"{self._log_name} turned item {str(item)} into {event.type} event"
-                            )
+
                         )
                     if self.command_event.is_set():
                         break
@@ -204,8 +203,8 @@ class AsyncRuntime(BaseRuntime):
         self.event_controller = AsyncEventController(
             node_id, config, command_event=self.command_event
         )
-        self.events_send_channel: Optional[trio.abc.SendChannel] = None
-        self.events_receive_channel: Optional[trio.abc.ReceiveChannel] = None
+        self.events_send_channel: trio.abc.SendChannel | None = None
+        self.events_receive_channel: trio.abc.ReceiveChannel | None = None
         self.nursery = None
 
     @property

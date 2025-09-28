@@ -69,7 +69,7 @@ EVENT_HEARTBEAT = Event(EventType.HeartbeatTime, None)
 EVENT_START_HEARTBEAT = Event(EventType.StartHeartbeat, None)
 
 
-def parse_msg_to_event(msg: bytes) -> Optional[Event]:
+def parse_msg_to_event(msg: bytes) -> Event | None:
     try:
         result = parse_msg(msg)
     except ValueError:

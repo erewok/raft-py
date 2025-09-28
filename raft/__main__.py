@@ -4,8 +4,10 @@ import sys
 
 from raft import runtimes
 
-from .io import loggers  # noqa
-from .io import storage
+from .io import (
+    loggers,  # noqa
+    storage,
+)
 from .models.config import Config
 
 logger = logging.getLogger("raft")

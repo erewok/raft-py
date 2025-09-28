@@ -1,7 +1,7 @@
 import logging
 import queue
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from raft.internal import trio  # only present if extra "async" installed
 from raft.io import loggers
