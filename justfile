@@ -47,3 +47,7 @@ docs-build *args:
 # Serve documentation locally with auto-reload
 docs-serve:
     uv run mkdocs serve
+
+# Run the demo with 3 nodes
+run-demo node_id="3":
+    uv run python -m raft -c raft.ini -n {{node_id}}

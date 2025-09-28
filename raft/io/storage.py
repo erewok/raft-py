@@ -4,7 +4,8 @@ import time
 from abc import abstractmethod
 from typing import Any
 
-from raft.internal import trio
+import trio
+
 from raft.models.config import Config
 
 logger = logging.getLogger("raft.io.storage")

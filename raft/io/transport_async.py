@@ -2,7 +2,8 @@ import logging
 import traceback
 from functools import partial
 
-from raft.internal import trio
+import trio
+
 from raft.io import (
     Address,
     CLIENT_LOG_NAME,

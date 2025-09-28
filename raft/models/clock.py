@@ -3,7 +3,8 @@ import queue
 import threading
 from collections.abc import Callable
 
-from raft.internal import trio  # only present if extra "async" installed
+import trio
+
 from raft.io import loggers
 
 from . import Event, EventType

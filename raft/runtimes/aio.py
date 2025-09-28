@@ -1,6 +1,7 @@
 import logging
 
-from raft.internal import trio  # only present if extra "async" installed
+import trio
+
 from raft.io import loggers, transport_async
 from raft.models import (
     clock,
