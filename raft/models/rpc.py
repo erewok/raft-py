@@ -2,7 +2,7 @@ import enum
 import json
 from abc import ABC, abstractmethod
 from operator import methodcaller
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeAlias, TypeVar
 
 from raft.io import transport
 from raft.models.log import LogEntry
@@ -314,11 +314,11 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         )
 
 
-RPCMessage = Union[
-    RequestVoteResponse[RPC],
-    RequestVoteRpc[RPC],
-    AppendEntriesResponse[RPC],
-    AppendEntriesRpc[RPC],
-    Debug[RPC],
-    ClientRequest[RPC],
-]
+RPCMessage: TypeAlias = (
+    RequestVoteResponse[RPC]
+    | RequestVoteRpc[RPC]
+    | AppendEntriesResponse[RPC]
+    | AppendEntriesRpc[RPC]
+    | Debug[RPC]
+    | ClientRequest[RPC]
+)

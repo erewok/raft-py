@@ -58,10 +58,7 @@ class ThreadedEventController(BaseEventController):
         self.events: queue.Queue[Event] = queue.Queue(maxsize=20)
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
-
-        self._log_name = "[EventController]"
-        if loggers.RICH_HANDLING_ON:
-            self._log_name = "[[bright_cyan]ThreadedEventController[/]]"
+        self._log_name = "[[bright_cyan]ThreadedEventController[/]]"
 
     def add_response_to_queue(self, msg):
         try:
@@ -192,9 +189,7 @@ class ThreadedRuntime(BaseRuntime):
 
     @property
     def log_name(self):
-        if loggers.RICH_HANDLING_ON:
-            return f"[[bright_cyan]ThreadedRuntime[/] - {self.instance.log_name()}]"
-        return f"[ThreadedRuntime - {self.instance.log_name()}]"
+        return f"[[bright_cyan]ThreadedRuntime[/] - {self.instance.log_name()}]"
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}

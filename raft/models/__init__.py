@@ -1,5 +1,5 @@
 import enum
-from typing import Any, Optional
+from typing import Any
 
 from .rpc import MsgType, parse_msg
 

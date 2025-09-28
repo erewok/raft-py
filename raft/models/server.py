@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import namedtuple
-from typing import Generic, TypeVar, Union
+from typing import Generic, TypeAlias, TypeVar
 
 from raft.io import loggers, transport
 from raft.models import (
@@ -142,9 +142,7 @@ class Candidate(BaseServer, Generic[S]):
 
     @classmethod
     def log_name(cls):
-        if loggers.RICH_HANDLING_ON:
-            return "[bold yellow]Candidate[/]"
-        return "Candidate"
+        return "[bold yellow]Candidate[/]"
 
     def increment_term(self):
         self.current_term += 1
@@ -248,9 +246,7 @@ class Follower(BaseServer, Generic[S]):
 
     @classmethod
     def log_name(cls):
-        if loggers.RICH_HANDLING_ON:
-            return "[bold green]Follower[/]"
-        return "Follower"
+        return "[bold green]Follower[/]"
 
     def handle_append_entries_message(self, event: Event) -> ResponsesEvents:
         # An RPC sent by leader to replicate log entries (see Raft §5.3)
@@ -398,9 +394,7 @@ class Leader(BaseServer, Generic[S]):
 
     @classmethod
     def log_name(cls):
-        if loggers.RICH_HANDLING_ON:
-            return "[bold red]Leader[/]"
-        return "Leader"
+        return "[bold red]Leader[/]"
 
     def handle_client_append_request(self, event: Event):
         entry = log.LogEntry(self.current_term, event.msg.command)
@@ -523,4 +517,4 @@ class Leader(BaseServer, Generic[S]):
         raise ValueError(f"{self._log_name} Can only convert Leader into a Follower")
 
 
-Server = Union[Leader[S], Candidate[S], Follower[S]]
+Server: TypeAlias = Leader[S] | Candidate[S] | Follower[S]

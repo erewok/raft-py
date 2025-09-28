@@ -182,8 +182,8 @@ def test_candidate_construct_request_vote_rpcs(follower, candidate):
             # make sure leader is telling nodes where to send replies
             assert new_candidate.address == msg.source
             # Get the message and confirm its values make sense
-            msg.last_log_index == len(new_candidate.log) - 1
-            msg.last_log_term == new_candidate.log[-1].term if new_candidate.log else 0
+            assert msg.last_log_index == len(new_candidate.log) - 1
+            assert msg.last_log_term == (new_candidate.log[-1].term if new_candidate.log else 0)
 
 
 def test_follower_handle_request_vote_rpc(
@@ -347,8 +347,8 @@ def test_leader_handle_heartbeat(leader):
         # make sure leader is telling nodes where to send replies
         assert leader.address == msg.source
         # Get the message and confirm its values make sense
-        msg.prev_log_index == leader.next_index[node_id] - 1
-        len(msg.entries) + leader.next_index[node_id] == len(leader.log)
+        assert msg.prev_log_index == leader.next_index[node_id] - 1
+        assert len(msg.entries) + leader.next_index[node_id] == len(leader.log)
 
 
 # This should be a *known* client!

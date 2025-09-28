@@ -68,8 +68,7 @@ class AsyncEventController(BaseEventController):
         self.cancel_scopes: dict[str, trio.CancelScope] = {}
 
         self._log_name = "[AsyncEventController]"
-        if loggers.RICH_HANDLING_ON:
-            self._log_name = "[[bright_cyan]AsyncEventController[/]]"
+        self._log_name = "[[bright_cyan]AsyncEventController[/]]"
 
     def set_nursery(self, nursery: trio.Nursery):
         self.nursery = nursery
@@ -212,9 +211,7 @@ class AsyncRuntime(BaseRuntime):
 
     @property
     def log_name(self):
-        if loggers.RICH_HANDLING_ON:
-            return f"[[bright_cyan]AsyncRuntime[/] - {self.instance.log_name()}]"
-        return f"[AsyncRuntime - {self.instance.log_name()}]"
+        return f"[[bright_cyan]AsyncRuntime[/] - {self.instance.log_name()}]"
 
     async def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
