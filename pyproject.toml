@@ -70,6 +70,7 @@ exclude_also = [
 
 [tool.coverage.run]
 omit = [
+    "__main__.py",
     # omit tracing.py and run
     "*/tracing.py",
 ]
