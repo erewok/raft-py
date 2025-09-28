@@ -5,8 +5,6 @@ from collections.abc import Callable
 
 import trio
 
-from raft.io import loggers
-
 from . import Event, EventType
 
 logger = logging.getLogger(__name__)

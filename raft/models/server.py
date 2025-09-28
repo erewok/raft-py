@@ -23,7 +23,7 @@ import logging
 from collections import namedtuple
 from typing import Generic, TypeAlias, TypeVar
 
-from raft.io import loggers, transport
+from raft.io import transport
 from raft.models import (
     Event,
     EVENT_CONVERSION_TO_FOLLOWER,
@@ -106,7 +106,7 @@ class BaseServer(Generic[S]):
         self.storage.save(self.log[-1])
 
     def convert(self, target_class) -> S:
-        logger.warning(f"Converting from {self._log_name} to {target_class.log_name()}")
+        logger.warning(f"Converting from {self._log_name} to {target_class.log_name}")
         self.validate_conversion(target_class)
         new_server = target_class(self.node_id, self.config, self.storage)
         for attr in new_server.transfer_attrs:
@@ -138,7 +138,7 @@ class Candidate(BaseServer, Generic[S]):
         super().__init__(*args, **kwargs)
         # node_ids get appended here if they vote for us
         self.votes_received: set[int] = set((self.node_id,))
-        self._log_name = self.log_name()
+        self._log_name = self.log_name
 
     @classmethod
     def log_name(cls):
@@ -242,7 +242,7 @@ class Follower(BaseServer, Generic[S]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.known_leader_node_id = None
-        self._log_name = self.log_name()
+        self._log_name = self.log_name
 
     @classmethod
     def log_name(cls):
@@ -390,7 +390,7 @@ class Leader(BaseServer, Generic[S]):
         self.match_index = {k: 0 for k in self.all_node_ids}
         # implementation specific
         self.consensus_threshold = (len(self.all_node_ids) // 2) + 1
-        self._log_name = self.log_name()
+        self._log_name = self.log_name
 
     @classmethod
     def log_name(cls):

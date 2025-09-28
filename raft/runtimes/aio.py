@@ -2,7 +2,7 @@ import logging
 
 import trio
 
-from raft.io import loggers, transport_async
+from raft.io import transport_async
 from raft.models import (
     clock,
     Event,
@@ -211,15 +211,13 @@ class AsyncRuntime(BaseRuntime):
 
     @property
     def log_name(self):
-        return f"[[bright_cyan]AsyncRuntime[/] - {self.instance.log_name()}]"
+        return f"[[bright_cyan]AsyncRuntime[/] - {self.instance.log_name}]"
 
     async def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
-            logger.info(
-                f"{self.log_name} is currently {self.instance.__class__.log_name()}"
-            )
+            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name}")
             for key in filter(
                 lambda el: el not in no_dump_keys, self.instance.transfer_attrs
             ):
@@ -247,11 +245,11 @@ class AsyncRuntime(BaseRuntime):
         elif event.type == EventType.ResetElectionTimeout:
             await self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
-            logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
+            logger.info(f"{self.log_name} Converting to {Follower.log_name}")
             await self.handle_reset_election_timeout(event)
             self.event_controller.stop_heartbeat()
         elif event.type == EventType.ConversionToLeader:
-            logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+            logger.info(f"{self.log_name} Converting to {Leader.log_name}")
             self.event_controller.stop_election_timer()
         elif event.type == EventType.StartHeartbeat:
             await self.handle_start_heartbeat(event)
