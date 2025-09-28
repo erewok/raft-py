@@ -3,7 +3,7 @@ import trio
 from raft.io import transport_async as transport
 
 GLOBAL_ITEMS = []
-ADDRESS = ("127.0.0.1", 5000)
+ADDRESS = ("127.0.0.1", 8000)
 BAD_ADDRESS = ("127.0.0.1", 7113)
 
 

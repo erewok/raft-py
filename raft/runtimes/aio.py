@@ -56,9 +56,11 @@ class AsyncEventController(BaseEventController):
         self.nursery = nursery
 
         # need a singleton to trigger closing states
-        self.command_event: trio.Event = (
-            command_event if command_event else trio.Event()
-        )
+        if command_event is None:
+            self.command_event = trio.Event()
+        else:
+            self.command_event = command_event
+
         # messages inbound should be placed here
         self.inbound_send_channel: trio.abc.SendChannel | None = None
         self.inbound_read_channel: trio.abc.ReadChannel | None = None
