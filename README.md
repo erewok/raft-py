@@ -9,16 +9,16 @@ Inspiration for this project has come from the original Raft paper. This project
 
 ## Running
 
-You can install dependencies with `poetry`:
+You can install dependencies with `just` and `uv`:
 
 ```sh
-$ poetry install
+$ just bootstrap
 ```
 
 After that, to run this using the provided `ini` file, you can invoke it using a node-id from 1 to 5:
 
 ```sh
-$ python -m raft -c raft.ini -n 2
+$ just run-demo 2
 [04/07/22 07:09:33] WARNING  [AsyncRuntime -     aio.py:312
                              Follower] Starting
                              up now
@@ -64,7 +64,7 @@ $ python -m raft -c raft.ini -n 2
 By default, the `AsyncRuntime` will be used, but there is also a `ThreadedRuntime` provided:
 
 ```sh
-$ python -m raft -c raft.ini -n 2 -r ThreadedRuntime
+$ uv run python -m raft -c raft.ini -n 2 -r ThreadedRuntime
 [04/07/22 07:11:23] WARNING  [ThreadedRuntime - Follower] is     threaded.py:293
                              starting in DEBUG mode
                     WARNING  [ThreadedRuntime - Follower] will   threaded.py:294

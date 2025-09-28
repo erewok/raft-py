@@ -2,10 +2,10 @@ import logging
 import queue
 import threading
 
-from raft.io import loggers, transport
+from raft.io import transport
 from raft.models import (
-    EVENT_CONVERSION_TO_FOLLOWER,
     Event,
+    EVENT_CONVERSION_TO_FOLLOWER,
     EventType,
     parse_msg_to_event,
 )
@@ -13,7 +13,7 @@ from raft.models.clock import ThreadedClock
 from raft.models.config import Config
 from raft.models.server import Follower, Leader, Server
 
-from .base import RUNTIME_EVENTS, BaseEventController, BaseRuntime
+from .base import BaseEventController, BaseRuntime, RUNTIME_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,7 @@ class ThreadedEventController(BaseEventController):
         self.events: queue.Queue[Event] = queue.Queue(maxsize=20)
         # outbound messages placed here will be sent out
         self.outbound_msg_queue: queue.Queue[transport.Request] = queue.Queue()
-
-        self._log_name = f"[EventController]"
-        if loggers.RICH_HANDLING_ON:
-            self._log_name = f"[[bright_cyan]ThreadedEventController[/]]"
+        self._log_name = "[[bright_cyan]ThreadedEventController[/]]"
 
     def add_response_to_queue(self, msg):
         try:
@@ -92,10 +89,10 @@ class ThreadedEventController(BaseEventController):
             event = self.client_msg_into_event(item)
             event_type = event.type if event is not None else "none"
             logger.info(
-                (
+
                     f"{self._log_name} turned item {str(item)} "
                     f"into {event_type} even with qsize now {self.events.qsize()}"
-                )
+
             )
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
@@ -192,17 +189,13 @@ class ThreadedRuntime(BaseRuntime):
 
     @property
     def log_name(self):
-        if loggers.RICH_HANDLING_ON:
-            return f"[[bright_cyan]ThreadedRuntime[/] - {self.instance.log_name()}]"
-        return f"[ThreadedRuntime - {self.instance.log_name()}]"
+        return f"[[bright_cyan]ThreadedRuntime[/] - {self.instance.log_name}]"
 
     def handle_debug_event(self, _: Event):
         no_dump_keys = {"config", "transfer_attrs", "log"}
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
-            logger.info(
-                f"{self.log_name} is currently {self.instance.__class__.log_name()}"
-            )
+            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name}")
             for key in filter(
                 lambda el: el not in no_dump_keys, self.instance.transfer_attrs
             ):
@@ -218,9 +211,7 @@ class ThreadedRuntime(BaseRuntime):
     def handle_start_heartbeat(self, _: Event):
         if self.debug:
             logger.info(f"{self.log_name} starting heartbeat")
-            logger.info(
-                f"{self.log_name} is currently {self.instance.__class__.log_name()}"
-            )
+            logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name}")
         self.event_controller.run_heartbeat()
 
     def runtime_handle_event(self, event):
@@ -230,11 +221,11 @@ class ThreadedRuntime(BaseRuntime):
         elif event.type == EventType.ResetElectionTimeout:
             self.handle_reset_election_timeout(event)
         elif event.type == EventType.ConversionToFollower:
-            logger.info(f"{self.log_name} Converting to {Follower.log_name()}")
+            logger.info(f"{self.log_name} Converting to {Follower.log_name}")
             self.handle_reset_election_timeout(event)
             self.event_controller.stop_heartbeat()
         elif event.type == EventType.ConversionToLeader:
-            logger.info(f"{self.log_name} Converting to {Leader.log_name()}")
+            logger.info(f"{self.log_name} Converting to {Leader.log_name}")
             self.event_controller.stop_election_timer()
         elif event.type == EventType.StartHeartbeat:
             self.handle_start_heartbeat(event)
@@ -290,10 +281,10 @@ class ThreadedRuntime(BaseRuntime):
 
             self.handle_event(event)
             logger.debug(
-                (
+
                     f"{self.log_name} Handled event with qsize now "
                     f"{self.event_controller.events.qsize()}"
-                )
+
             )
         logger.warning(f"{self.log_name} Stop: Shutting down primary event handler")
 

@@ -1,12 +1,5 @@
 import logging.config
 
-try:
-    from rich.logging import RichHandler
-
-    RICH_HANDLING_ON = True
-except ImportError:
-    RICH_HANDLING_ON = False
-
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": True,
@@ -53,12 +46,12 @@ LOGGING_CONFIG = {
     },
 }
 
-if RICH_HANDLING_ON:
-    LOGGING_CONFIG["handlers"]["default"] = {  # type: ignore
-        "level": "INFO",
-        "class": "rich.logging.RichHandler",
-        "rich_tracebacks": True,
-        "markup": True,
-    }
+# Rich handling
+LOGGING_CONFIG["handlers"]["default"] = {  # type: ignore
+    "level": "INFO",
+    "class": "rich.logging.RichHandler",
+    "rich_tracebacks": True,
+    "markup": True,
+}
 
 logging.config.dictConfig(LOGGING_CONFIG)

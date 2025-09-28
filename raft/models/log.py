@@ -1,4 +1,3 @@
-from typing import List
 
 
 class LogEntry:
@@ -33,7 +32,7 @@ class Log:
     """
 
     def __init__(self):
-        self.log: List[LogEntry] = []
+        self.log: list[LogEntry] = []
 
     def __eq__(self, other):
         return self.log == other.log
@@ -51,7 +50,7 @@ class Log:
         pass
 
     def append_entries(
-        self, prev_index: int = -1, prev_term: int = -1, entries: List[LogEntry] = None
+        self, prev_index: int = -1, prev_term: int = -1, entries: list[LogEntry] = None
     ) -> bool:
         """
         NOTE: Assume `prev_index` is using 0-based indexing UNLIKE as specified in the paper!
@@ -79,7 +78,7 @@ class Log:
         # "If an existing entry conflicts with a new one (same index, but different terms)"
         # delete the existing entry and all that follow it
         for n, (existing_entry, new_entry) in enumerate(
-            zip(self.log[insertion_point], entries)
+            zip(self.log[insertion_point], entries, strict=False)
         ):
             if existing_entry.term != new_entry.term:
                 del self.log[next_index + n :]

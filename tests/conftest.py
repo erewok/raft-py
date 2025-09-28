@@ -2,10 +2,10 @@ import configparser
 import os
 
 import pytest
-
 from raft.io.storage import InMemoryStorage
-from raft.models import log, rpc, server
 from raft.models.config import Config
+
+from raft.models import log, rpc, server
 
 test_dir = os.path.dirname(__file__)
 root_dir = os.path.dirname(test_dir)

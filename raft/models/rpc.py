@@ -2,7 +2,7 @@ import enum
 import json
 from abc import ABC, abstractmethod
 from operator import methodcaller
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import Any, Generic, TypeAlias, TypeVar
 
 from raft.io import transport
 from raft.models.log import LogEntry
@@ -54,8 +54,8 @@ class Debug(Generic[RPC]):
 
     def __init__(
         self,
-        dest: Optional[transport.Address] = None,
-        source: Optional[transport.Address] = None,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
     ):
         self.type = MsgType.DEBUG_MESSAGE
         self.dest = dest
@@ -114,10 +114,10 @@ class AppendEntriesRpc(RpcBase, Generic[RPC]):
         leader_id: int = -1,
         prev_log_index: int = -1,
         prev_log_term: int = -1,
-        entries: List[LogEntry] = None,
+        entries: list[LogEntry] = None,
         leader_commit_index: int = -1,
-        dest: Optional[transport.Address] = None,
-        source: Optional[transport.Address] = None,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
     ):
         entries = entries or []
         self.term = term
@@ -130,7 +130,7 @@ class AppendEntriesRpc(RpcBase, Generic[RPC]):
         self.source = source
         self.type = MsgType.AppendEntriesRequest
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "term": self.term,
             "leader_id": self.leader_id,
@@ -178,8 +178,8 @@ class AppendEntriesResponse(RpcBase, Generic[RPC]):
         match_index: int = -1,
         source_node_id: int = -1,
         success: bool = False,
-        dest: Optional[transport.Address] = None,
-        source: Optional[transport.Address] = None,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
     ):
         self.term = term
         self.success = success
@@ -189,7 +189,7 @@ class AppendEntriesResponse(RpcBase, Generic[RPC]):
         self.source = source
         self.type = MsgType.AppendEntriesResponse
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "term": self.term,
             "match_index": self.match_index,
@@ -233,8 +233,8 @@ class RequestVoteRpc(RpcBase, Generic[RPC]):
         candidate_id: int,
         last_log_index: int,
         last_log_term: int,
-        dest: Optional[transport.Address] = None,
-        source: Optional[transport.Address] = None,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
     ):
         self.term = term
         self.candidate_id = candidate_id
@@ -244,7 +244,7 @@ class RequestVoteRpc(RpcBase, Generic[RPC]):
         self.source = source
         self.type = MsgType.RequestVoteRequest
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "term": self.term,
             "candidate_id": self.candidate_id,
@@ -279,8 +279,8 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         term: int,
         source_node_id: int,
         vote_granted: bool,
-        dest: Optional[transport.Address] = None,
-        source: Optional[transport.Address] = None,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
     ):
         self.term = term
         self.vote_granted = vote_granted
@@ -289,7 +289,7 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         self.source = source
         self.type = MsgType.RequestVoteResponse
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "term": self.term,
             "vote_granted": self.vote_granted,
@@ -314,11 +314,11 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         )
 
 
-RPCMessage = Union[
-    RequestVoteResponse[RPC],
-    RequestVoteRpc[RPC],
-    AppendEntriesResponse[RPC],
-    AppendEntriesRpc[RPC],
-    Debug[RPC],
-    ClientRequest[RPC],
-]
+RPCMessage: TypeAlias = (
+    RequestVoteResponse[RPC]
+    | RequestVoteRpc[RPC]
+    | AppendEntriesResponse[RPC]
+    | AppendEntriesRpc[RPC]
+    | Debug[RPC]
+    | ClientRequest[RPC]
+)

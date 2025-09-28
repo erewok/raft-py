@@ -3,7 +3,7 @@ import time
 
 import trio
 
-from raft.models import EventType, clock
+from raft.models import clock, EventType
 
 GLOBAL_ITEMS = []
 
@@ -25,7 +25,7 @@ def test_heartbeat():
         except queue.Empty:
             break
     assert len(all_events) == 5
-    for item, next_item in zip(all_events, all_events[1:]):
+    for item, next_item in zip(all_events, all_events[1:], strict=False):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime
 
@@ -52,6 +52,6 @@ async def test_async_heartbeat():
                 await trio.sleep(0.5)
                 heartbeat.stop()
     assert len(GLOBAL_ITEMS) == 5
-    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:]):
+    for item, next_item in zip(GLOBAL_ITEMS, GLOBAL_ITEMS[1:], strict=False):
         assert item == next_item
         assert item.type == EventType.HeartbeatTime

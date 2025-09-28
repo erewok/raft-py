@@ -1,4 +1,3 @@
-from __future__ import nested_scopes
 
 import pytest
 
@@ -145,7 +144,7 @@ def test_follower_candidate_convert(etype, new_class, events, candidate):
         assert is_empty_response(resps)
     else:
         assert not is_empty_response(resps)
-        for left, right in zip(events, resps.events):
+        for left, right in zip(events, resps.events, strict=False):
             assert left == right
 
     if new_class is None:
@@ -175,7 +174,7 @@ def test_candidate_construct_request_vote_rpcs(follower, candidate):
         for key in filter(lambda el: el != "current_term", raft_server.transfer_attrs):
             assert getattr(raft_server, key) == getattr(new_candidate, key)
 
-        for node_id, msg in zip(new_candidate.all_node_ids, resps):
+        for node_id, msg in zip(new_candidate.all_node_ids, resps, strict=False):
             # make sure leader is not including itself in recipients
             assert new_candidate.address != msg.dest
             # Check recipient is correct
@@ -183,8 +182,8 @@ def test_candidate_construct_request_vote_rpcs(follower, candidate):
             # make sure leader is telling nodes where to send replies
             assert new_candidate.address == msg.source
             # Get the message and confirm its values make sense
-            msg.last_log_index == len(new_candidate.log) - 1
-            msg.last_log_term == new_candidate.log[-1].term if new_candidate.log else 0
+            assert msg.last_log_index == len(new_candidate.log) - 1
+            assert msg.last_log_term == (new_candidate.log[-1].term if new_candidate.log else 0)
 
 
 def test_follower_handle_request_vote_rpc(
@@ -340,7 +339,7 @@ def test_leader_handle_heartbeat(leader):
     # no conversion happened
     assert not empty
     assert inst is leader
-    for node_id, msg in zip(leader.all_node_ids, resps):
+    for node_id, msg in zip(leader.all_node_ids, resps, strict=False):
         # make sure leader is not including itself in recipients
         assert leader.address != msg.dest
         # Check recipient is correct
@@ -348,8 +347,8 @@ def test_leader_handle_heartbeat(leader):
         # make sure leader is telling nodes where to send replies
         assert leader.address == msg.source
         # Get the message and confirm its values make sense
-        msg.prev_log_index == leader.next_index[node_id] - 1
-        len(msg.entries) + leader.next_index[node_id] == len(leader.log)
+        assert msg.prev_log_index == leader.next_index[node_id] - 1
+        assert len(msg.entries) + leader.next_index[node_id] == len(leader.log)
 
 
 # This should be a *known* client!
