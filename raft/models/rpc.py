@@ -17,6 +17,8 @@ class MsgType(enum.IntEnum):
     AppendEntriesRequest = 3
     AppendEntriesResponse = 4
     ClientRequest = 5
+    InstallSnapshotRequest = 6
+    InstallSnapshotResponse = 7
     DEBUG_MESSAGE = 99
 
     def __str__(self):
@@ -37,6 +39,10 @@ def parse_msg(msg_bytes: bytes):
         return AppendEntriesRpc.from_dict(data)
     elif msg_type == MsgType.AppendEntriesResponse:
         return AppendEntriesResponse.from_dict(data)
+    elif msg_type == MsgType.InstallSnapshotRequest:
+        return InstallSnapshotRpc.from_dict(data)
+    elif msg_type == MsgType.InstallSnapshotResponse:
+        return InstallSnapshotResponse.from_dict(data)
     elif msg_type == MsgType.ClientRequest:
         return ClientRequest(
             cmd=data.get("body", "").encode("utf-8"),
@@ -314,11 +320,137 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         )
 
 
+class InstallSnapshotRpc(RpcBase, Generic[RPC]):
+    """RPC for leader to send snapshot chunks to followers"""
+
+    __slots__ = [
+        "term",
+        "leader_id",
+        "last_included_index",
+        "last_included_term",
+        "offset",
+        "data",
+        "done",
+        "type",
+        "dest",
+        "source",
+    ]
+
+    def __init__(
+        self,
+        term: int,
+        leader_id: int,
+        last_included_index: int,
+        last_included_term: int,
+        offset: int,
+        data: bytes,
+        done: bool,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
+    ):
+        self.term = term
+        self.leader_id = leader_id
+        self.last_included_index = last_included_index
+        self.last_included_term = last_included_term
+        self.offset = offset  # Byte offset for this chunk
+        self.data = data  # Chunk of snapshot data
+        self.done = done  # True if this is the final chunk
+        self.dest = dest
+        self.source = source
+        self.type = MsgType.InstallSnapshotRequest
+
+    def to_dict(self) -> dict[str, Any]:
+        import base64
+
+        return {
+            "term": self.term,
+            "leader_id": self.leader_id,
+            "last_included_index": self.last_included_index,
+            "last_included_term": self.last_included_term,
+            "offset": self.offset,
+            "data": base64.b64encode(self.data).decode("utf-8"),
+            "done": self.done,
+            "type": int(self.type),
+            "dest": self.dest,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], **kwargs) -> "InstallSnapshotRpc[RPC]":
+        import base64
+
+        return cls(
+            **{
+                "term": data.get("term", -1),
+                "leader_id": data.get("leader_id", -1),
+                "last_included_index": data.get("last_included_index", -1),
+                "last_included_term": data.get("last_included_term", -1),
+                "offset": data.get("offset", 0),
+                "data": base64.b64decode(data.get("data", "")),
+                "done": data.get("done", False),
+                "dest": tuple(data.get("dest")) if data.get("dest") else None,
+                "source": tuple(data.get("source")) if data.get("source") else None,
+            }
+        )
+
+
+class InstallSnapshotResponse(RpcBase, Generic[RPC]):
+    """Response to InstallSnapshot RPC"""
+
+    __slots__ = [
+        "term",
+        "success",
+        "bytes_stored",
+        "type",
+        "dest",
+        "source",
+    ]
+
+    def __init__(
+        self,
+        term: int,
+        success: bool,
+        bytes_stored: int = 0,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
+    ):
+        self.term = term
+        self.success = success
+        self.bytes_stored = bytes_stored  # How many bytes successfully stored
+        self.dest = dest
+        self.source = source
+        self.type = MsgType.InstallSnapshotResponse
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "term": self.term,
+            "success": self.success,
+            "bytes_stored": self.bytes_stored,
+            "type": int(self.type),
+            "dest": self.dest,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], **kwargs) -> "InstallSnapshotResponse[RPC]":
+        return cls(
+            **{
+                "term": data.get("term", -1),
+                "success": data.get("success", False),
+                "bytes_stored": data.get("bytes_stored", 0),
+                "dest": tuple(data.get("dest")) if data.get("dest") else None,
+                "source": tuple(data.get("source")) if data.get("source") else None,
+            }
+        )
+
+
 RPCMessage: TypeAlias = (
     RequestVoteResponse[RPC]
     | RequestVoteRpc[RPC]
     | AppendEntriesResponse[RPC]
     | AppendEntriesRpc[RPC]
+    | InstallSnapshotRpc[RPC]
+    | InstallSnapshotResponse[RPC]
     | Debug[RPC]
     | ClientRequest[RPC]
 )

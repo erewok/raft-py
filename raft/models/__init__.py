@@ -52,6 +52,8 @@ class EventType(enum.IntEnum):
     HeartbeatTime = 10
     ClientAppendRequest = 11
     ResetElectionTimeout = 12
+    InstallSnapshotRequestRpc = 20
+    InstallSnapshotConfirm = 21
 
     # We need to manage timers when various things happen
     ConversionToCandidate = 14
@@ -108,6 +110,10 @@ def parse_msg_to_event(msg: bytes) -> Event | None:
         return Event(EventType.CandidateRequestVoteRpc, result)
     elif result.type == MsgType.RequestVoteResponse:
         return Event(EventType.ReceiveServerCandidateVote, result)
+    elif result.type == MsgType.InstallSnapshotRequest:
+        return Event(EventType.InstallSnapshotRequestRpc, result)
+    elif result.type == MsgType.InstallSnapshotResponse:
+        return Event(EventType.InstallSnapshotConfirm, result)
     elif result.type == MsgType.ClientRequest:
         return Event(EventType.ClientAppendRequest, result)
     elif result.type == MsgType.DEBUG_MESSAGE:

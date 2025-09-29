@@ -269,8 +269,8 @@ def test_storage_classes_implement_base_interface(temp_config):
         storage = storage_class(1, temp_config)
 
         # Check that required methods exist
-        assert hasattr(storage, 'save_metadata')
-        assert hasattr(storage, 'save_log_entry')
+        assert hasattr(storage, "save_metadata")
+        assert hasattr(storage, "save_log_entry")
         assert callable(storage.save_metadata)
         assert callable(storage.save_log_entry)
 

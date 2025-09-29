@@ -16,7 +16,19 @@ class Config:
         self.election_timeout_ms = int(conf["Cluster"]["ElectionTimeout"]) / 1000
         self.heartbeat_timeout_ms = self.election_timeout_ms / self.heartbeat_interval
         self.node_count = int(conf["Cluster"]["NodeCount"])
+
+        # Storage configuration
         self.storage_class = conf["Cluster"]["StorageClass"]
+
+        # Snapshot configuration
+        self.snapshot_threshold = int(conf["Cluster"].get("SnapshotThreshold", "1000"))
+        self.max_snapshots_to_keep = int(conf["Cluster"].get("MaxSnapshotsToKeep", "3"))
+        compression_setting = conf["Cluster"].get("SnapshotCompressionEnabled", "False")
+        self.snapshot_compression_enabled = compression_setting == "True"
+        self.state_machine_class = conf["Cluster"].get("StateMachineClass", "KeyValueStateMachine")
+
+        # For backward compatibility, support log_compaction_threshold as alias for snapshot_threshold
+        self.log_compaction_threshold = self.snapshot_threshold
 
     @cached_property
     def node_mapping(self):
@@ -31,8 +43,6 @@ class Config:
     @property
     def get_election_timeout(self):
         def inner():
-            return (
-                random.randint(self.election_timeout, self.election_timeout * 2) / 1000
-            )
+            return random.randint(self.election_timeout, self.election_timeout * 2) / 1000
 
         return inner

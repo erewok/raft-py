@@ -1,4 +1,3 @@
-
 import pytest
 
 from raft import models
@@ -88,9 +87,7 @@ def test_leader_validate_conversions(leader):
         ("f_log", False),
     ),
 )
-def test_follower_msg_append(
-    log_to_pull, success_expected, follower, figure7_logs, fig7_sample_message
-):
+def test_follower_msg_append(log_to_pull, success_expected, follower, figure7_logs, fig7_sample_message):
     follower.log = figure7_logs[log_to_pull]
     follower.commit_index = 4
     follower.current_term = follower.log[-1].term
@@ -186,9 +183,7 @@ def test_candidate_construct_request_vote_rpcs(follower, candidate):
             assert msg.last_log_term == (new_candidate.log[-1].term if new_candidate.log else 0)
 
 
-def test_follower_handle_request_vote_rpc(
-    follower, fig7_a_log, candidate_request_vote_event
-):
+def test_follower_handle_request_vote_rpc(follower, fig7_a_log, candidate_request_vote_event):
     follower.log = fig7_a_log
     follower.current_term = follower.log[-1].term
 
@@ -240,9 +235,7 @@ def test_follower_handle_request_vote_rpc(
     assert not results.events
 
 
-def test_handle_vote_response_greater_term(
-    candidate, follower, fig7_a_log, candidate_request_vote_event
-):
+def test_handle_vote_response_greater_term(candidate, follower, fig7_a_log, candidate_request_vote_event):
     # First, we try it with a term that's < Candidate's term
     candidate.current_term = 20
     follower.log = fig7_a_log
@@ -270,9 +263,7 @@ def test_handle_vote_response_greater_term(
     assert responses.events[0] == models.EVENT_CONVERSION_TO_FOLLOWER
 
 
-def test_handle_vote_response(
-    candidate, follower, fig7_a_log, candidate_request_vote_event
-):
+def test_handle_vote_response(candidate, follower, fig7_a_log, candidate_request_vote_event):
     follower.log = fig7_a_log
     follower.current_term = follower.log[-1].term
     # Reusing logic from follower-request vote tests
@@ -387,6 +378,4 @@ def test_leader_handle_append_response(leader):
     assert inst is leader
     assert leader.commit_index == 8
     assert leader.match_index[APPEND_FAIL.msg.source_node_id] == current_match_for_node
-    assert (
-        leader.next_index[APPEND_FAIL.msg.source_node_id] == current_next_for_node - 1
-    )
+    assert leader.next_index[APPEND_FAIL.msg.source_node_id] == current_next_for_node - 1

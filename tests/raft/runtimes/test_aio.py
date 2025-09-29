@@ -100,9 +100,7 @@ async def test_runstop_controller_with_some_events(
 # # # # # # # # # # # # # # # # #
 
 
-async def test_runstop_runtime_with_some_events(
-    runner, fig7_sample_message, request_vote_message, debug_msg
-):
+async def test_runstop_runtime_with_some_events(runner, fig7_sample_message, request_vote_message, debug_msg):
     fig7_sample_message.dest = runner.event_controller.address
     request_vote_message.dest = runner.event_controller.address
     debug_msg.dest = runner.event_controller.address

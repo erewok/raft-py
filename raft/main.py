@@ -14,17 +14,10 @@ def get_storage_class(runtime, storage_class):
     if not hasattr(storage, storage_class):
         raise ValueError(f"Invalid storage class: {storage_class}")
     storage_class = getattr(storage, storage_class)
-    if (
-        runtime == runtimes.ThreadedRuntime
-        and storage_class == storage.AsyncFileStorage
-    ):
-        raise ValueError(
-            "Incompatible storage class: AsyncFileStorage with ThreadedRuntime"
-        )
+    if runtime == runtimes.ThreadedRuntime and storage_class == storage.AsyncFileStorage:
+        raise ValueError("Incompatible storage class: AsyncFileStorage with ThreadedRuntime")
     if runtime == runtimes.AsyncRuntime and storage_class == storage.FileStorage:
-        raise ValueError(
-            "Incompatible storage class: AsyncRuntime with Sync FileStorage"
-        )
+        raise ValueError("Incompatible storage class: AsyncRuntime with Sync FileStorage")
     return storage_class
 
 

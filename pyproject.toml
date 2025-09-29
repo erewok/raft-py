@@ -23,6 +23,9 @@ dependencies = [
     "trio >= 0.31.0"
 ]
 
+[project.optional-dependencies]
+rocksdb = ["python-rocksdb"]
+
 [project.urls]
 Documentation = "https://erewok.github.io/raft-py/"
 Repository = "https://github.com/erewok/raft-py"
