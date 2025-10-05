@@ -3,7 +3,14 @@
 import logging
 import os
 
-from raft.io.storage import AsyncFileStorage, BaseStorage, FileStorage, InMemoryStorage
+from raft.io.storage import (
+    AsyncFileStorage,
+    AsyncSqliteStorage,
+    BaseStorage,
+    FileStorage,
+    InMemoryStorage,
+    SqliteStorage,
+)
 from raft.models.config import Config
 
 logger = logging.getLogger(__name__)
@@ -31,7 +38,7 @@ class StorageFactory:
         data_directory = config.data_directory
 
         # Ensure data directory exists
-        if storage_class in ["FileStorage", "AsyncFileStorage", "RocksDBStorage"]:
+        if storage_class in ["FileStorage", "AsyncFileStorage", "SqliteStorage", "AsyncSqliteStorage"]:
             node_data_dir = os.path.join(data_directory, f"node_{node_id}")
             os.makedirs(node_data_dir, exist_ok=True)
 
@@ -47,44 +54,31 @@ class StorageFactory:
             logger.info(f"Creating AsyncFileStorage for node {node_id} at {node_data_dir}")
             return AsyncFileStorage(node_id, config)
 
-        elif storage_class == "RocksDBStorage":
-            logger.info(f"Creating RocksDBStorage for node {node_id} at {node_data_dir}")
-            return StorageFactory._create_rocksdb_storage(node_id, config)
+        elif storage_class == "SqliteStorage":
+            logger.info(f"Creating SqliteStorage for node {node_id} at {node_data_dir}")
+            return SqliteStorage(node_id, config)
+
+        elif storage_class == "AsyncSqliteStorage":
+            logger.info(f"Creating AsyncSqliteStorage for node {node_id} at {node_data_dir}")
+            return AsyncSqliteStorage(node_id, config)
 
         else:
             raise ValueError(
                 f"Unsupported storage class: {storage_class}. "
-                f"Supported classes: InMemoryStorage, FileStorage, AsyncFileStorage, RocksDBStorage"
+                f"Supported classes: InMemoryStorage, FileStorage, AsyncFileStorage, "
+                f"SqliteStorage, AsyncSqliteStorage"
             )
-
-    @staticmethod
-    def _create_rocksdb_storage(node_id: int, config: Config) -> BaseStorage:
-        """Create a RocksDB storage backend.
-
-        This is separated out to handle the optional dependency gracefully.
-        """
-        try:
-            from raft.io.storage_rocksdb import RocksDBStorage
-
-            return RocksDBStorage(node_id, config)
-        except ImportError as e:
-            raise ImportError(
-                "RocksDBStorage requires the 'python-rocksdb' package. "
-                "Install it with: pip install python-rocksdb"
-            ) from e
 
     @staticmethod
     def get_available_storage_classes() -> list[str]:
         """Get a list of available storage classes."""
-        available = ["InMemoryStorage", "FileStorage", "AsyncFileStorage"]
-
-        # Check if RocksDB is available
-        try:
-            import rocksdb  # noqa: F401
-
-            available.append("RocksDBStorage")
-        except ImportError:
-            pass
+        available = [
+            "InMemoryStorage",
+            "FileStorage",
+            "AsyncFileStorage",
+            "SqliteStorage",
+            "AsyncSqliteStorage",
+        ]
 
         return available
 
@@ -107,7 +101,12 @@ class StorageFactory:
             )
 
         # Validate data directory for persistent storage
-        if config.storage_class in ["FileStorage", "AsyncFileStorage", "RocksDBStorage"]:
+        if config.storage_class in [
+            "FileStorage",
+            "AsyncFileStorage",
+            "SqliteStorage",
+            "AsyncSqliteStorage",
+        ]:
             if not config.data_directory:
                 raise ValueError(f"DataDirectory must be specified for {config.storage_class}")
 

@@ -60,6 +60,37 @@ class TestConfigurableComponents:
             node_dir = os.path.join(temp_dir, "node_1")
             assert os.path.exists(node_dir)
 
+    def test_sqlite_storage_creation(self):
+        """Test creating SqliteStorage from configuration."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create config
+            conf = configparser.ConfigParser()
+            conf.add_section("Cluster")
+            conf.set("Cluster", "Debug", "True")
+            conf.set("Cluster", "DataDirectory", temp_dir)
+            conf.set("Cluster", "HeartbeatInterval", "5")
+            conf.set("Cluster", "ElectionTimeout", "1000")
+            conf.set("Cluster", "NodeCount", "3")
+            conf.set("Cluster", "StorageClass", "SqliteStorage")
+
+            config = Config(conf)
+
+            # Create storage
+            storage = StorageFactory.create_storage(1, config)
+
+            # Verify
+            assert type(storage).__name__ == "SqliteStorage"
+            assert hasattr(storage, "save_snapshot")
+            assert hasattr(storage, "load_snapshot")
+            assert hasattr(storage, "get_storage_stats")
+
+            # Verify database file was created
+            assert os.path.exists(storage.db_path)
+            assert storage.db_path.endswith("node_1.db")
+
+            # Clean up
+            storage.close()
+
     def test_keyvalue_state_machine_creation(self):
         """Test creating KeyValueStateMachine from configuration."""
         # Create config
@@ -171,6 +202,7 @@ class TestConfigurableComponents:
         assert "InMemoryStorage" in storage_classes
         assert "FileStorage" in storage_classes
         assert "AsyncFileStorage" in storage_classes
+        assert "SqliteStorage" in storage_classes
 
         sm_classes = StateMachineFactory.get_available_state_machine_classes()
         assert "NoOpStateMachine" in sm_classes

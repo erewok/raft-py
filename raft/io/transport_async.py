@@ -113,7 +113,7 @@ if __name__ == "__main__":  # pragma: no cover
     async def print_results(read_chan: trio.abc.ReceiveChannel):
         async with read_chan:
             async for msg in read_chan:
-                print(msg)
+                logger.info(msg)
 
     async def client_test():
         async with trio.open_nursery() as nursery:

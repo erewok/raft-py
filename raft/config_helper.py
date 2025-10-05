@@ -70,28 +70,28 @@ def create_raft_components(node_id: int, config: Config):
 
 
 def print_available_components():
-    """Print available storage and state machine classes."""
-    print("Available Storage Classes:")
+    """Log available storage and state machine classes."""
+    logger.info("Available Storage Classes:")
     for storage_class in StorageFactory.get_available_storage_classes():
-        print(f"  - {storage_class}")
+        logger.info(f"  - {storage_class}")
 
-    print("\nAvailable State Machine Classes:")
+    logger.info("Available State Machine Classes:")
     for sm_class in StateMachineFactory.get_available_state_machine_classes():
-        print(f"  - {sm_class}")
+        logger.info(f"  - {sm_class}")
 
 
 if __name__ == "__main__":
     # Example usage
-    print("Raft Configuration Helper")
-    print("=" * 50)
+    logger.info("Raft Configuration Helper")
+    logger.info("=" * 50)
 
     print_available_components()
 
     try:
         config = load_config_from_file()
         storage, state_machine = create_raft_components(1, config)
-        print("\nSuccessfully created components:")
-        print(f"  Storage: {type(storage).__name__}")
-        print(f"  State Machine: {type(state_machine).__name__}")
+        logger.info("Successfully created components:")
+        logger.info(f"  Storage: {type(storage).__name__}")
+        logger.info(f"  State Machine: {type(state_machine).__name__}")
     except Exception as e:
-        print(f"\nError: {e}")
+        logger.error(f"Error: {e}")

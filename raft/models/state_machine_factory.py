@@ -34,44 +34,16 @@ class StateMachineFactory:
             logger.info("Creating KeyValueStateMachine")
             return KeyValueStateMachine()
 
-        elif state_machine_class == "RocksDBStateMachine":
-            logger.info("Creating RocksDBStateMachine")
-            return StateMachineFactory._create_rocksdb_state_machine(config)
-
         else:
             raise ValueError(
                 f"Unsupported state machine class: {state_machine_class}. "
-                f"Supported classes: NoOpStateMachine, KeyValueStateMachine, RocksDBStateMachine"
+                f"Supported classes: NoOpStateMachine, KeyValueStateMachine,"
             )
-
-    @staticmethod
-    def _create_rocksdb_state_machine(config: Config) -> StateMachine:
-        """Create a RocksDB state machine.
-
-        This is separated out to handle the optional dependency gracefully.
-        """
-        try:
-            from raft.models.snapshot_rocksdb import RocksDBStateMachine
-
-            return RocksDBStateMachine(config.data_directory)
-        except ImportError as e:
-            raise ImportError(
-                "RocksDBStateMachine requires the 'python-rocksdb' package. "
-                "Install it with: pip install python-rocksdb"
-            ) from e
 
     @staticmethod
     def get_available_state_machine_classes() -> list[str]:
         """Get a list of available state machine classes."""
         available = ["NoOpStateMachine", "KeyValueStateMachine"]
-
-        # Check if RocksDB is available
-        try:
-            import rocksdb  # noqa: F401
-
-            available.append("RocksDBStateMachine")
-        except ImportError:
-            pass
 
         return available
 
