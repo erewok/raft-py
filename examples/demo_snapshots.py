@@ -51,19 +51,23 @@ def main():
 
     # Add some entries
     logger.info("2. Adding log entries and applying them:")
+    import json
+    from raft.models.snapshot import KeyValueStateMachine
     entries = [
-        LogEntry(term=1, command={"op": "set", "key": "user1", "value": "Alice"}),
-        LogEntry(term=1, command={"op": "set", "key": "user2", "value": "Bob"}),
-        LogEntry(term=1, command={"op": "set", "key": "user3", "value": "Charlie"}),
-        LogEntry(term=1, command={"op": "set", "key": "user4", "value": "David"}),
-        LogEntry(term=1, command={"op": "set", "key": "user5", "value": "Eve"}),
+        LogEntry(term=1, data=json.dumps({"op": "set", "key": "user1", "value": "Alice"}).encode()),
+        LogEntry(term=1, data=json.dumps({"op": "set", "key": "user2", "value": "Bob"}).encode()),
+        LogEntry(term=1, data=json.dumps({"op": "set", "key": "user3", "value": "Charlie"}).encode()),
+        LogEntry(term=1, data=json.dumps({"op": "set", "key": "user4", "value": "David"}).encode()),
+        LogEntry(term=1, data=json.dumps({"op": "set", "key": "user5", "value": "Eve"}).encode()),
     ]
 
     for i, entry in enumerate(entries):
-        leader.log.append_entries([entry])
+        prev_index = len(leader.log.log) - 1
+        prev_term = leader.log.log[prev_index].term if prev_index >= 0 else -1
+        leader.log.append_entries(prev_index=prev_index, prev_term=prev_term, entries=[entry])
         leader.commit_index = i
         leader._apply_committed_entries()
-        logger.info(f"   Applied entry {i + 1}: {entry.command}")
+        logger.info(f"   Applied entry {i + 1}: {json.loads(entry.command.decode())}")
 
     logger.info(f"   Log entries: {len(leader.log.log)}")
     logger.info(f"   State machine contains: {list(state_machine.data.keys())}")
@@ -73,19 +77,27 @@ def main():
     should_snapshot = leader.should_create_snapshot()
     logger.info(f"   Should create snapshot: {should_snapshot}")
     logger.info(f"   Log size: {len(leader.log.log)}")
-    logger.info(f"   Snapshot threshold: {config.log_compaction_threshold}")
+    logger.info(f"   Snapshot threshold: {leader.snapshot_threshold}")
 
-    # Create snapshot
-    if should_snapshot:
-        logger.info("4. Creating snapshot:")
-        snapshot_id = leader.create_snapshot()
+    # Force snapshot creation for demo purposes by lowering threshold
+    logger.info("4. Forcing snapshot creation for demo:")
+    original_threshold = leader.snapshot_threshold
+    leader.snapshot_threshold = 3  # Lower threshold for demo
+
+    snapshot_id = leader.create_snapshot()
+    if snapshot_id:
         logger.info(f"   Created snapshot: {snapshot_id}")
 
         # Show snapshot details
         snapshot = storage.load_snapshot(snapshot_id)
-        logger.info(f"   Snapshot metadata: {snapshot.metadata}")
-        logger.info(f"   Snapshot data: {snapshot.data}")
+        logger.info(f"   Snapshot last included index: {snapshot.last_included_index}")
+        logger.info(f"   Snapshot last included term: {snapshot.last_included_term}")
         logger.info(f"   Data integrity verified: {snapshot.verify_integrity()}")
+    else:
+        logger.info("   Failed to create snapshot")
+
+    # Restore original threshold
+    leader.snapshot_threshold = original_threshold
 
     # Demonstrate log compaction
     logger.info("5. Log compaction simulation:")
@@ -95,9 +107,9 @@ def main():
     keep_entries = 2
     compact_before_index = leader.last_applied - keep_entries
     if compact_before_index > 0:
-        storage.compact_log(compact_before_index)
-        logger.info(f"   After compaction - Log entries: {len(storage.load_log().log)}")
-        logger.info(f"   Compacted entries before index: {compact_before_index}")
+        compacted_count = storage.compact_log(compact_before_index)
+        logger.info(f"   After compaction - Log entries: {len(leader.log.log)}")
+        logger.info(f"   Compacted {compacted_count} entries before index: {compact_before_index}")
 
     # Demonstrate restoration
     logger.info("6. State restoration from snapshot:")
@@ -108,7 +120,7 @@ def main():
     latest_snapshot_meta = storage.get_latest_snapshot_metadata()
     if latest_snapshot_meta:
         snapshot = storage.load_snapshot(latest_snapshot_meta.snapshot_id)
-        new_state_machine.restore_snapshot(snapshot.data)
+        new_state_machine.restore_from_snapshot(snapshot.state_machine_data)
         logger.info(f"   After restore: {new_state_machine.get_state_size()} items")
         logger.info(f"   Restored data: {list(new_state_machine.data.keys())}")
 
@@ -118,6 +130,8 @@ def main():
             restored_value = new_state_machine.get(key)
             status = "✓" if original_value == restored_value else "✗"
             logger.info(f"   {key}: {original_value} -> {restored_value} ({status})")
+    else:
+        logger.info("   No snapshots available for restoration")
 
     logger.info("=== Demo Complete ===")
 

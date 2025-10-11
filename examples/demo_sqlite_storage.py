@@ -13,8 +13,6 @@ import time
 
 from raft.io.storage import SqliteStorage
 from raft.models.config import Config
-from raft.models.log import LogEntry
-from raft.models.server import Leader
 from raft.models.snapshot import KeyValueStateMachine, Snapshot
 
 # Configure logging for the demo

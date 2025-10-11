@@ -814,6 +814,7 @@ class AsyncSqliteStorage(BaseStorage):
                 state_machine_data BLOB NOT NULL,
                 configuration TEXT,
                 timestamp REAL NOT NULL,
+                checksum TEXT NOT NULL,
                 created_at REAL DEFAULT (julianday('now')),
                 size_bytes INTEGER NOT NULL
             )
@@ -919,8 +920,8 @@ class AsyncSqliteStorage(BaseStorage):
                 INSERT INTO snapshots (
                     snapshot_id, last_included_index, last_included_term,
                     state_machine_data, configuration, timestamp,
-                    created_at, size_bytes
-                ) VALUES (?, ?, ?, ?, ?, ?, julianday('now'), ?)
+                    checksum, created_at, size_bytes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, julianday('now'), ?)
             """,
                 (
                     snapshot_id,
@@ -929,6 +930,7 @@ class AsyncSqliteStorage(BaseStorage):
                     snapshot.state_machine_data,
                     config_json,
                     snapshot.timestamp,
+                    snapshot.checksum,
                     size_bytes,
                 ),
             )
@@ -951,7 +953,7 @@ class AsyncSqliteStorage(BaseStorage):
             cursor = conn.execute(
                 """
                 SELECT last_included_index, last_included_term, state_machine_data,
-                       configuration, timestamp
+                       configuration, timestamp, checksum
                 FROM snapshots
                 WHERE snapshot_id = ?
             """,
@@ -965,13 +967,20 @@ class AsyncSqliteStorage(BaseStorage):
             # Deserialize configuration
             configuration = json.loads(row["configuration"]) if row["configuration"] else None
 
-            return Snapshot(
+            snapshot = Snapshot(
                 last_included_index=row["last_included_index"],
                 last_included_term=row["last_included_term"],
                 state_machine_data=row["state_machine_data"],
                 configuration=configuration,
                 timestamp=row["timestamp"],
+                checksum=row["checksum"],
             )
+
+            # Verify integrity
+            if not snapshot.verify_integrity():
+                logger.warning(f"Snapshot {snapshot_id} failed integrity check")
+
+            return snapshot
 
         return await trio.to_thread.run_sync(_load_snapshot)
 

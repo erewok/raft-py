@@ -53,3 +53,7 @@ docs-serve:
 # Run the demo with 3 nodes
 run-demo node_id="3":
     uv run python -m raft -c raft.ini -n {{node_id}}
+
+# Run an example
+example script="demo_snapshots":
+    uv run python -m examples.{{script}}
