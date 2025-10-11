@@ -405,7 +405,7 @@ class FileStorage(BaseStorage):
 
 class SqliteStorage(BaseStorage):
     """
-    Production-ready SQLite storage backend with ACID transactions,
+    SQLite storage backend with ACID transactions,
     connection pooling, and optimized queries for Raft operations.
     """
 

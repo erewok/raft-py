@@ -2,7 +2,7 @@
 """
 SQLite Storage Demo for Raft Implementation
 
-This script demonstrates the production-ready SQLite storage backend,
+This script demonstrates the SQLite storage backend,
 showcasing ACID transactions, performance features, and monitoring capabilities.
 """
 
@@ -237,16 +237,6 @@ def main():
 
         # Clean up
         storage.close()
-        logger.info("✓ SQLite storage demo completed successfully!")
-        logger.info("Key features demonstrated:")
-        logger.info("  • ACID transactions with automatic rollback")
-        logger.info("  • Optimized indexing for fast queries")
-        logger.info("  • Thread-safe connection management")
-        logger.info("  • Efficient log compaction")
-        logger.info("  • Snapshot lifecycle management")
-        logger.info("  • Comprehensive monitoring statistics")
-        logger.info("  • Production-ready performance")
-
 
 if __name__ == "__main__":
     main()

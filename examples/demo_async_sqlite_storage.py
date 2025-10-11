@@ -256,21 +256,10 @@ async def main():
 
         # Final statistics
         final_stats = await storage.get_database_stats()
-        logger.info(f"\\n📊 Final database state:")
+        logger.info("📊 Final database state:")
         logger.info(f"   - Total log entries: {final_stats['log_entries_count']}")
         logger.info(f"   - Total snapshots: {final_stats['snapshots_count']}")
         logger.info(f"   - Database size: {final_stats['database_size_bytes']} bytes")
-
-        logger.info("\\n✅ Async SQLite storage demo completed successfully!")
-        logger.info("\\n🎯 Key features demonstrated:")
-        logger.info("  • Trio-compatible async/await patterns")
-        logger.info("  • ACID transactions with thread-safe operation")
-        logger.info("  • Concurrent operations using trio nurseries")
-        logger.info("  • Optimized performance using trio.to_thread.run_sync")
-        logger.info("  • Efficient log compaction with async operations")
-        logger.info("  • Snapshot lifecycle management")
-        logger.info("  • Comprehensive monitoring statistics")
-        logger.info("  • Production-ready async performance")
 
 
 if __name__ == "__main__":
