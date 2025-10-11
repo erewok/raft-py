@@ -92,16 +92,16 @@ async def main():
 
         # Create some log entries
         log_entries = [
-            MockLogEntry(1, b'{"op": "set", "key": "user1", "value": "Alice"}'),
-            MockLogEntry(1, b'{"op": "set", "key": "user2", "value": "Bob"}'),
-            MockLogEntry(2, b'{"op": "set", "key": "user3", "value": "Charlie"}'),
-            MockLogEntry(2, b'{"op": "delete", "key": "user2"}'),
-            MockLogEntry(3, b'{"op": "set", "key": "user4", "value": "Diana"}'),
+            b'{"term": 1, "op": "set", "key": "user1", "value": "Alice"}',
+            b'{"term": 1, "op": "set", "key": "user2", "value": "Bob"}',
+            b'{"term": 2, "op": "set", "key": "user3", "value": "Charlie"}',
+            b'{"term": 2, "op": "delete", "key": "user2"}',
+            b'{"term": 3, "op": "set", "key": "user4", "value": "Diana"}',
         ]
 
         for i, entry in enumerate(log_entries):
             await storage.save_log_entry(entry)
-            logger.info(f"   ✓ Log entry {i + 1} saved (term {entry.term})")
+            logger.info(f"   ✓ Log entry {i + 1} saved")
 
         # 3. State machine and snapshot operations
         logger.info("\\n3. Snapshot operations:")
@@ -123,7 +123,7 @@ async def main():
 
         # Load snapshot back
         loaded_snapshot = await storage.load_snapshot(snapshot_id)
-        logger.info(f"   ✓ Snapshot loaded successfully")
+        logger.info("   ✓ Snapshot loaded successfully")
         logger.info(f"     - Last included index: {loaded_snapshot.last_included_index}")
         logger.info(f"     - Last included term: {loaded_snapshot.last_included_term}")
 
@@ -183,22 +183,22 @@ async def main():
         # 7. Log compaction
         logger.info("\\n7. Log compaction:")
 
-        stats_before = await storage.get_database_stats()
+        stats_before = await storage.get_storage_stats()
         entries_before = stats_before["log_entries_count"]
         logger.info(f"   📊 Log entries before compaction: {entries_before}")
 
         compacted_count = await storage.compact_log(up_to_index=3)
         logger.info(f"   🗜️  Compacted {compacted_count} log entries")
 
-        stats_after = await storage.get_database_stats()
+        stats_after = await storage.get_storage_stats()
         entries_after = stats_after["log_entries_count"]
         logger.info(f"   📊 Log entries after compaction: {entries_after}")
 
         # 8. Database statistics
         logger.info("\\n8. Database statistics:")
-        stats = await storage.get_database_stats()
+        stats = await storage.get_storage_stats()
 
-        logger.info(f"   📊 Database statistics:")
+        logger.info("   📊 Database statistics:")
         logger.info(f"     - Log entries: {stats['log_entries_count']}")
         logger.info(f"     - Snapshots: {stats['snapshots_count']}")
         logger.info(f"     - Metadata records: {stats['metadata_count']}")
@@ -213,7 +213,7 @@ async def main():
         async def concurrent_writer(start_idx, count, nursery_name):
             """Write log entries concurrently."""
             for i in range(count):
-                entry = MockLogEntry(4, f"concurrent_{nursery_name}_{start_idx + i}".encode())
+                entry = f"concurrent_{nursery_name}_{start_idx + i}".encode()
                 await storage.save_log_entry(entry)
 
         start_time = time.time()
@@ -235,7 +235,7 @@ async def main():
 
         async def batch_insert():
             for i in range(100):
-                entry = MockLogEntry(5, f"perf_test_entry_{i}".encode())
+                entry = f"perf_test_entry_{i}".encode()
                 await storage.save_log_entry(entry)
 
         await batch_insert()
@@ -248,14 +248,14 @@ async def main():
         start_time = time.time()
 
         for _ in range(100):
-            await storage.get_database_stats()
+            await storage.get_storage_stats()
 
         query_time = time.time() - start_time
         logger.info(f"    ⚡ Completed 100 database stat queries in {query_time:.3f} seconds")
         logger.info(f"    📈 Rate: {100 / query_time:.1f} queries/second")
 
         # Final statistics
-        final_stats = await storage.get_database_stats()
+        final_stats = await storage.get_storage_stats()
         logger.info("📊 Final database state:")
         logger.info(f"   - Total log entries: {final_stats['log_entries_count']}")
         logger.info(f"   - Total snapshots: {final_stats['snapshots_count']}")

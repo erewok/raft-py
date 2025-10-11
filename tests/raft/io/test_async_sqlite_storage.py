@@ -321,7 +321,7 @@ class TestAsyncSqliteStorage:
         storage = AsyncSqliteStorage(1, self.config)
 
         # Get initial stats
-        stats = await storage.get_database_stats()
+        stats = await storage.get_storage_stats()
         assert stats["log_entries_count"] == 0
         assert stats["snapshots_count"] == 0
         assert stats["metadata_count"] == 0
@@ -345,7 +345,7 @@ class TestAsyncSqliteStorage:
         await storage.save_snapshot(snapshot)
 
         # Get updated stats
-        stats = await storage.get_database_stats()
+        stats = await storage.get_storage_stats()
         assert stats["log_entries_count"] == 1
         assert stats["snapshots_count"] == 1
         assert stats["metadata_count"] == 1

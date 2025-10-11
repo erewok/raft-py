@@ -78,11 +78,11 @@ def main():
         # Demonstrate log entry storage
         logger.info("3. Storing log entries:")
         log_entries = [
-            b'{"term": 1, "command": {"op": "set", "key": "user1", "value": "Alice"}}',
-            b'{"term": 1, "command": {"op": "set", "key": "user2", "value": "Bob"}}',
-            b'{"term": 2, "command": {"op": "set", "key": "user3", "value": "Charlie"}}',
-            b'{"term": 2, "command": {"op": "set", "key": "user4", "value": "David"}}',
-            b'{"term": 2, "command": {"op": "delete", "key": "user1"}}',
+            b'{"term": 1, "op": "set", "key": "user1", "value": "Alice"}',
+            b'{"term": 1, "op": "set", "key": "user2", "value": "Bob"}',
+            b'{"term": 2, "op": "set", "key": "user3", "value": "Charlie"}',
+            b'{"term": 2, "op": "delete", "key": "user2"}',
+            b'{"term": 3, "op": "set", "key": "user4", "value": "Diana"}',
         ]
 
         for i, entry in enumerate(log_entries, 1):

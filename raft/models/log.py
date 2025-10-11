@@ -1,3 +1,6 @@
+import json
+
+
 class LogEntry:
     __slots__ = ["command", "term"]
 
@@ -17,6 +20,9 @@ class LogEntry:
     @classmethod
     def from_json(cls, item):
         return cls(item.get("term"), item.get("command", "").encode("utf-8"))
+
+    def to_json(self) -> bytes:
+        return json.dumps(self.to_dict()).encode("utf-8")
 
 
 class Log:

@@ -1,5 +1,6 @@
 {
   "editor.defaultFormatter": "charliermarsh.ruff",
   "editor.formatOnSaveMode": "modifications",
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "python-envs.pythonProjects": []
 }

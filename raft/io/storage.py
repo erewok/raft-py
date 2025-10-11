@@ -6,6 +6,8 @@ import threading
 import time
 from abc import abstractmethod
 from contextlib import contextmanager
+from functools import partial
+from pathlib import Path
 from typing import Any
 
 import trio
@@ -14,6 +16,18 @@ from raft.models.config import Config
 from raft.models.snapshot import Snapshot, SnapshotMetadata
 
 logger = logging.getLogger("raft.io.storage")
+
+def get_migration_files():
+    """Get migration SQL files from the migrations directory."""
+    # Always use the migrations directory relative to the project root
+    migrations_dir = Path(__file__).parent.parent.parent / "migrations"
+    if migrations_dir.exists():
+        return sorted(migrations_dir.glob("*.sql"))
+    else:
+        raise RuntimeError(f"Migrations directory not found at {migrations_dir}")
+
+
+sql_files = get_migration_files()
 
 
 class BaseStorage:
@@ -421,7 +435,7 @@ class SqliteStorage(BaseStorage):
         self._local = threading.local()
 
         # Initialize database schema
-        self._init_database()
+        self.init_database()
 
         logger.info(f"Initialized SQLite storage for node {node_id} at {self.db_path}")
 
@@ -463,58 +477,17 @@ class SqliteStorage(BaseStorage):
             conn.execute("ROLLBACK")
             raise
 
-    def _init_database(self):
+    def init_database(self):
         """Initialize database schema with proper indexes and constraints."""
-        with self._transaction() as conn:
-            # Metadata table for Raft state (term, voted_for)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS metadata (
-                    key TEXT PRIMARY KEY,
-                    value BLOB NOT NULL,
-                    updated_at REAL NOT NULL DEFAULT (julianday('now'))
-                )
-            """)
+        migration_files = get_migration_files()
+        if not migration_files:
+            raise RuntimeError("Missing SQL Migrations; cannot proceed with DB init")
 
-            # Log entries table with optimized indexes
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS log_entries (
-                    log_index INTEGER PRIMARY KEY,
-                    term INTEGER NOT NULL,
-                    entry_data BLOB NOT NULL,
-                    created_at REAL NOT NULL DEFAULT (julianday('now'))
-                )
-            """)
-
-            # Snapshots table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS snapshots (
-                    snapshot_id TEXT PRIMARY KEY,
-                    last_included_index INTEGER NOT NULL,
-                    last_included_term INTEGER NOT NULL,
-                    state_machine_data BLOB NOT NULL,
-                    configuration TEXT NOT NULL,
-                    timestamp REAL NOT NULL,
-                    checksum TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    created_at REAL NOT NULL DEFAULT (julianday('now'))
-                )
-            """)
-
-            # Create indexes for optimal query performance
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_log_entries_term 
-                ON log_entries(term)
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_snapshots_created_at 
-                ON snapshots(created_at DESC)
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_snapshots_last_included 
-                ON snapshots(last_included_index, last_included_term)
-            """)
+        # executescript handles its own transactions, so don't use _transaction() here
+        conn = self._get_connection()
+        for fl in migration_files:
+            sql_content = fl.read_text().strip()
+            conn.executescript(sql_content)
 
     def save_metadata(self, value: bytes):
         """Save Raft metadata (current term, voted for) with ACID guarantees."""
@@ -747,454 +720,71 @@ class SqliteStorage(BaseStorage):
             pass  # Ignore errors during cleanup
 
 
-class AsyncSqliteStorage(BaseStorage):
+class AsyncSqliteStorage(SqliteStorage):
     """
     Async SQLite-based persistent storage for Raft implementation using trio.
 
-    Provides ACID transaction support, efficient querying, and async/await
-    compatibility for use with trio-based async runtime. Uses trio.to_thread
-    for async database operations.
+    Provides async/await *wrapper* around SqliteStorage methods.
+    Uses trio.to_thread for async database operations.
     """
 
     def __init__(self, node_id: int, config: Config):
-        self.node_id = node_id
-        self.config = config
-        self.node_label = config.node_mapping[node_id]["label"]
-
-        # Ensure data directory exists
-        os.makedirs(config.data_directory, exist_ok=True)
-
-        # Database file path
-        self.db_path = os.path.join(config.data_directory, f"raft_{self.node_label}.db")
-
-        # Thread-local connection management
-        self._connection_cache = threading.local()
-
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get a thread-local database connection with proper configuration."""
-        if not hasattr(self._connection_cache, "connection") or self._connection_cache.connection is None:
-            conn = sqlite3.connect(
-                self.db_path,
-                isolation_level=None,  # Use autocommit mode for explicit transactions
-            )
-
-            # Enable WAL mode for better concurrent access
-            conn.execute("PRAGMA journal_mode=WAL")
-
-            # Enable foreign key constraints
-            conn.execute("PRAGMA foreign_keys=ON")
-
-            # Set row factory for dict-like access
-            conn.row_factory = sqlite3.Row
-
-            self._connection_cache.connection = conn
-
-        return self._connection_cache.connection
-
-    def _initialize_schema(self):
-        """Initialize the database schema (synchronous version)."""
-        conn = self._get_connection()
-
-        # Create log entries table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS log_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                term INTEGER NOT NULL,
-                data BLOB NOT NULL,
-                created_at REAL DEFAULT (julianday('now'))
-            )
-        """)
-
-        # Create snapshots table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS snapshots (
-                snapshot_id TEXT PRIMARY KEY,
-                last_included_index INTEGER NOT NULL,
-                last_included_term INTEGER NOT NULL,
-                state_machine_data BLOB NOT NULL,
-                configuration TEXT,
-                timestamp REAL NOT NULL,
-                checksum TEXT NOT NULL,
-                created_at REAL DEFAULT (julianday('now')),
-                size_bytes INTEGER NOT NULL
-            )
-        """)
-
-        # Create metadata table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS metadata (
-                key TEXT PRIMARY KEY,
-                value BLOB NOT NULL,
-                updated_at REAL DEFAULT (julianday('now'))
-            )
-        """)
-
-        # Create indexes for performance
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_log_entries_term
-            ON log_entries(term)
-        """)
-
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_snapshots_created_at
-            ON snapshots(created_at DESC)
-        """)
-
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_snapshots_last_included
-            ON snapshots(last_included_index DESC)
-        """)
-
-        conn.commit()
+        super().__init__(node_id, config)
 
     async def save_metadata(self, value: bytes):
         """Save metadata to the database."""
-
-        def _save_metadata():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO metadata (key, value, updated_at)
-                VALUES ('raft_metadata', ?, julianday('now'))
-            """,
-                (value,),
-            )
-            conn.commit()
-
-        await trio.to_thread.run_sync(_save_metadata)
+        return await trio.to_thread.run_sync(super().save_metadata, value)
 
     async def save_log_entry(self, entry):
         """Save a log entry to the database."""
 
-        def _save_log_entry():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            # Extract term and data from entry
-            if hasattr(entry, "term") and hasattr(entry, "data"):
-                term, data = entry.term, entry.data
-            elif isinstance(entry, dict):
-                term, data = entry["term"], entry["data"]
-            else:
-                # Fallback: treat as bytes and extract term from first 8 bytes
-                term = int.from_bytes(entry[:8], "big")
-                data = entry[8:]
-
-            conn = self._get_connection()
-            conn.execute(
-                """
-                INSERT INTO log_entries (term, data, created_at)
-                VALUES (?, ?, julianday('now'))
-            """,
-                (term, data),
-            )
-            conn.commit()
-
-        await trio.to_thread.run_sync(_save_log_entry)
+        return await trio.to_thread.run_sync(super().save_log_entry, entry)
 
     async def save_snapshot(self, snapshot: Snapshot) -> str:
         """Save a snapshot and return a unique snapshot ID."""
 
-        def _save_snapshot():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            # Generate unique snapshot ID
-            snapshot_id = f"async_sqlite_snapshot_{int(time.time() * 1000000)}_{snapshot.last_included_index}"
-
-            # Serialize configuration
-            config_json = json.dumps(snapshot.configuration) if snapshot.configuration else None
-
-            # Calculate size
-            size_bytes = len(snapshot.state_machine_data)
-
-            conn = self._get_connection()
-            conn.execute(
-                """
-                INSERT INTO snapshots (
-                    snapshot_id, last_included_index, last_included_term,
-                    state_machine_data, configuration, timestamp,
-                    checksum, created_at, size_bytes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, julianday('now'), ?)
-            """,
-                (
-                    snapshot_id,
-                    snapshot.last_included_index,
-                    snapshot.last_included_term,
-                    snapshot.state_machine_data,
-                    config_json,
-                    snapshot.timestamp,
-                    snapshot.checksum,
-                    size_bytes,
-                ),
-            )
-            conn.commit()
-
-            logger.info(f"Saved async snapshot {snapshot_id} to SQLite database")
-            return snapshot_id
-
-        return await trio.to_thread.run_sync(_save_snapshot)
+        return await trio.to_thread.run_sync(super().save_snapshot, snapshot)
 
     async def load_snapshot(self, snapshot_id: str) -> Snapshot:
         """Load a snapshot by its ID."""
 
-        def _load_snapshot():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            cursor = conn.execute(
-                """
-                SELECT last_included_index, last_included_term, state_machine_data,
-                       configuration, timestamp, checksum
-                FROM snapshots
-                WHERE snapshot_id = ?
-            """,
-                (snapshot_id,),
-            )
-
-            row = cursor.fetchone()
-            if not row:
-                raise KeyError(f"Snapshot {snapshot_id} not found")
-
-            # Deserialize configuration
-            configuration = json.loads(row["configuration"]) if row["configuration"] else None
-
-            snapshot = Snapshot(
-                last_included_index=row["last_included_index"],
-                last_included_term=row["last_included_term"],
-                state_machine_data=row["state_machine_data"],
-                configuration=configuration,
-                timestamp=row["timestamp"],
-                checksum=row["checksum"],
-            )
-
-            # Verify integrity
-            if not snapshot.verify_integrity():
-                logger.warning(f"Snapshot {snapshot_id} failed integrity check")
-
-            return snapshot
-
-        return await trio.to_thread.run_sync(_load_snapshot)
+        return await trio.to_thread.run_sync(super().load_snapshot, snapshot_id)
 
     async def get_latest_snapshot_metadata(self) -> SnapshotMetadata | None:
         """Get metadata of the most recent snapshot."""
-
-        def _get_latest():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            cursor = conn.execute("""
-                SELECT snapshot_id, last_included_index, last_included_term,
-                       size_bytes, timestamp
-                FROM snapshots
-                ORDER BY created_at DESC
-                LIMIT 1
-            """)
-
-            row = cursor.fetchone()
-            if not row:
-                return None
-
-            return SnapshotMetadata(
-                snapshot_id=row["snapshot_id"],
-                last_included_index=row["last_included_index"],
-                last_included_term=row["last_included_term"],
-                size_bytes=row["size_bytes"],
-                created_at=row["timestamp"],
-                file_path=self.db_path,
-            )
-
-        return await trio.to_thread.run_sync(_get_latest)
+        return await trio.to_thread.run_sync(super().get_latest_snapshot_metadata)
 
     async def list_snapshots(self) -> list[SnapshotMetadata]:
         """List all available snapshots, ordered by creation time (newest first)."""
 
-        def _list_snapshots():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            cursor = conn.execute("""
-                SELECT snapshot_id, last_included_index, last_included_term,
-                       size_bytes, timestamp
-                FROM snapshots
-                ORDER BY created_at DESC
-            """)
-
-            snapshots = []
-            for row in cursor:
-                snapshots.append(
-                    SnapshotMetadata(
-                        snapshot_id=row["snapshot_id"],
-                        last_included_index=row["last_included_index"],
-                        last_included_term=row["last_included_term"],
-                        size_bytes=row["size_bytes"],
-                        created_at=row["timestamp"],
-                        file_path=self.db_path,
-                    )
-                )
-
-            return snapshots
-
-        return await trio.to_thread.run_sync(_list_snapshots)
+        return await trio.to_thread.run_sync(super().list_snapshots)
 
     async def delete_snapshot(self, snapshot_id: str) -> bool:
         """Delete a snapshot by its ID."""
 
-        def _delete_snapshot():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            cursor = conn.execute(
-                """
-                DELETE FROM snapshots WHERE snapshot_id = ?
-            """,
-                (snapshot_id,),
-            )
-            conn.commit()
-
-            deleted = cursor.rowcount > 0
-            if deleted:
-                logger.info(f"Deleted async snapshot {snapshot_id} from SQLite database")
-
-            return deleted
-
-        return await trio.to_thread.run_sync(_delete_snapshot)
+        return await trio.to_thread.run_sync(super().delete_snapshot, snapshot_id)
 
     async def delete_old_snapshots(self, keep_count: int = 3) -> int:
         """Delete old snapshots, keeping only the most recent ones."""
-
-        def _delete_old_snapshots():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-
-            # Get snapshot IDs to delete (all but the most recent keep_count)
-            cursor = conn.execute(
-                """
-                SELECT snapshot_id FROM snapshots
-                ORDER BY created_at DESC
-                LIMIT -1 OFFSET ?
-            """,
-                (keep_count,),
-            )
-
-            to_delete = [row["snapshot_id"] for row in cursor]
-
-            if not to_delete:
-                return 0
-
-            # Delete the old snapshots
-            placeholders = ",".join("?" * len(to_delete))
-            conn.execute(
-                f"""
-                DELETE FROM snapshots WHERE snapshot_id IN ({placeholders})
-            """,
-                to_delete,
-            )
-            conn.commit()
-
-            deleted_count = len(to_delete)
-            logger.info(f"Deleted {deleted_count} old async snapshots from SQLite database")
-            return deleted_count
-
-        return await trio.to_thread.run_sync(_delete_old_snapshots)
+        parent_method = partial(super().delete_old_snapshots, keep_count=keep_count)
+        return await trio.to_thread.run_sync(parent_method)
 
     async def compact_log(self, up_to_index: int) -> int:
         """Remove log entries up to the specified index (inclusive)."""
 
-        def _compact_log():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-
-            # Count entries to be deleted
-            cursor = conn.execute(
-                """
-                SELECT COUNT(*) as count FROM log_entries WHERE id <= ?
-            """,
-                (up_to_index,),
-            )
-
-            row = cursor.fetchone()
-            count_to_delete = row["count"] if row else 0
-
-            # Delete the entries
-            conn.execute(
-                """
-                DELETE FROM log_entries WHERE id <= ?
-            """,
-                (up_to_index,),
-            )
-            conn.commit()
-
-            logger.info(f"Compacted async log: deleted {count_to_delete} entries up to index {up_to_index}")
-            return count_to_delete
-
-        result = await trio.to_thread.run_sync(_compact_log)
+        result = await trio.to_thread.run_sync(super().compact_log, up_to_index)
 
         # Run VACUUM separately as it can't be in a transaction
-        def _vacuum():
-            conn = self._get_connection()
-            conn.execute("VACUUM")
-
-        await trio.to_thread.run_sync(_vacuum)
+        await self.vacuum()
         return result
 
-    async def get_database_stats(self) -> dict[str, Any]:
+    async def vacuum(self):
+        return await trio.to_thread.run_sync(super().vacuum)
+
+    async def get_storage_stats(self) -> dict[str, Any]:
         """Get database statistics (async version)."""
 
-        def _get_stats():
-            if not hasattr(self, "_initialized"):
-                self._initialize_schema()
-                self._initialized = True
-
-            conn = self._get_connection()
-            stats = {}
-
-            cursor = conn.execute("SELECT COUNT(*) as count FROM log_entries")
-            row = cursor.fetchone()
-            stats["log_entries_count"] = row["count"] if row else 0
-
-            cursor = conn.execute("SELECT COUNT(*) as count FROM snapshots")
-            row = cursor.fetchone()
-            stats["snapshots_count"] = row["count"] if row else 0
-
-            cursor = conn.execute("SELECT COUNT(*) as count FROM metadata")
-            row = cursor.fetchone()
-            stats["metadata_count"] = row["count"] if row else 0
-
-            # Get database size
-            try:
-                file_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
-                stats["database_size_bytes"] = file_size
-            except OSError:
-                stats["database_size_bytes"] = 0
-
-            stats["database_path"] = self.db_path
-            stats["node_id"] = self.node_id
-            stats["node_label"] = self.node_label
-
-            return stats
-
-        return await trio.to_thread.run_sync(_get_stats)
+        return await trio.to_thread.run_sync(super().get_storage_stats)
 
 
 class AsyncFileStorage(BaseStorage):
