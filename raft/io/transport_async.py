@@ -37,9 +37,7 @@ async def receive_message(stream: trio.abc.ReceiveStream):
         return None
 
     while bytes_recd < msg_len:
-        chunk = await stream.receive_some(
-            max_bytes=min(msg_len - bytes_recd, DEFAULT_MSG_LEN)
-        )
+        chunk = await stream.receive_some(max_bytes=min(msg_len - bytes_recd, DEFAULT_MSG_LEN))
         if chunk == b"":
             raise RuntimeError("Socket connection broken")
         chunks.append(chunk)
@@ -92,9 +90,7 @@ async def client_send_msg(
                         )
                     )
             except OSError:
-                logger.error(
-                    f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}"
-                )
+                logger.error(f"{CLIENT_LOG_NAME} Send Failure {address[0]}:{address[1]}")
                 await result_chan.send(
                     (
                         address,
@@ -126,9 +122,7 @@ if __name__ == "__main__":  # pragma: no cover
                 nursery.start_soon(print_results, results_rx.clone())
                 for n in range(12):
                     data = json.dumps({"test": n, "status": "ok"})
-                    await client_send_msg(
-                        nursery, ADDRESS, data.encode("utf-8"), results_tx
-                    )
+                    await client_send_msg(nursery, ADDRESS, data.encode("utf-8"), results_tx)
 
     async def server_test():
         async with trio.open_nursery() as nursery:

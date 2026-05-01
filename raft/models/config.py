@@ -31,8 +31,6 @@ class Config:
     @property
     def get_election_timeout(self):
         def inner():
-            return (
-                random.randint(self.election_timeout, self.election_timeout * 2) / 1000
-            )
+            return random.randint(self.election_timeout, self.election_timeout * 2) / 1000
 
         return inner

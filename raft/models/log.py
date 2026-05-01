@@ -1,7 +1,4 @@
-
-
 class LogEntry:
-
     __slots__ = ["command", "term"]
 
     def __init__(self, term: int, data: bytes):

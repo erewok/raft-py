@@ -144,7 +144,7 @@ class FileStorage(BaseStorage):
     def clear_log(self):
         # Remove all data files
         if os.path.exists(self.data_filepath):
-            for root, dirs, files in os.walk(self.data_filepath):
+            for root, _dirs, files in os.walk(self.data_filepath):
                 for f in files:
                     os.remove(os.path.join(root, f))
 
@@ -231,6 +231,6 @@ class AsyncFileStorage(BaseStorage):
 
     async def clear_log(self):
         if os.path.exists(self.data_filepath):
-            for root, dirs, files in os.walk(self.data_filepath):
+            for root, _dirs, files in os.walk(self.data_filepath):
                 for f in files:
                     os.remove(os.path.join(root, f))

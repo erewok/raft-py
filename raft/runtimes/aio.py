@@ -84,9 +84,7 @@ class AsyncEventController(BaseEventController):
                     inbound_send_channel.clone(),
                 )
 
-                await self.process_inbound_msgs(
-                    events_channel, inbound_read_channel.clone()
-                )
+                await self.process_inbound_msgs(events_channel, inbound_read_channel.clone())
 
     def stop(self):
         self.stop_election_timer()
@@ -124,18 +122,12 @@ class AsyncEventController(BaseEventController):
                 async for item in inbound_msg_chan:
                     if event := self.client_msg_into_event(item):
                         await events_channel.send(event)
-                        logger.info(
-
-                                f"{self._log_name} turned item {str(item)} into {event.type} event"
-
-                        )
+                        logger.info(f"{self._log_name} turned item {str(item)} into {event.type} event")
                     if self.command_event.is_set():
                         break
 
     async def send_outbound_msg(self, response: rpc.RPCMessage):
-        logger.info(
-            f"{self._log_name}: send outbound message {response.type} to {response.dest}"
-        )
+        logger.info(f"{self._log_name}: send outbound message {response.type} to {response.dest}")
         results_tx, _ = trio.open_memory_channel(2)
         async with results_tx:
             # We actually fire-and-forget: we don't read the response
@@ -202,9 +194,7 @@ class AsyncRuntime(BaseRuntime):
         self.debug = config.debug
         self.instance: Server = Follower(node_id, config, storage)
         self.command_event: trio.Event = trio.Event()
-        self.event_controller = AsyncEventController(
-            node_id, config, command_event=self.command_event
-        )
+        self.event_controller = AsyncEventController(node_id, config, command_event=self.command_event)
         self.events_send_channel: trio.abc.SendChannel | None = None
         self.events_receive_channel: trio.abc.ReceiveChannel | None = None
         self.nursery = None
@@ -218,9 +208,7 @@ class AsyncRuntime(BaseRuntime):
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
             logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name}")
-            for key in filter(
-                lambda el: el not in no_dump_keys, self.instance.transfer_attrs
-            ):
+            for key in filter(lambda el: el not in no_dump_keys, self.instance.transfer_attrs):
                 value = getattr(self.instance, key)
                 logger.info(f"\t`{key}`: \t {str(value)}")
             logger.info(f"\t`Log`: \t {repr(self.instance.log)}")
@@ -234,9 +222,7 @@ class AsyncRuntime(BaseRuntime):
 
     async def handle_start_heartbeat(self, _: Event):
         logger.info(f"{self.log_name} starting heartbeat")
-        self.nursery.start_soon(
-            self.event_controller.run_heartbeat, self.events_send_channel.clone()
-        )
+        self.nursery.start_soon(self.event_controller.run_heartbeat, self.events_send_channel.clone())
 
     async def runtime_handle_event(self, event):
         """For events that need to interact with the runtime"""
@@ -255,9 +241,7 @@ class AsyncRuntime(BaseRuntime):
             await self.handle_start_heartbeat(event)
 
     def drop_event(self, event):
-        if event.type == EventType.HeartbeatTime and not isinstance(
-            self.instance, Leader
-        ):
+        if event.type == EventType.HeartbeatTime and not isinstance(self.instance, Leader):
             return True
         return False
 
@@ -271,9 +255,7 @@ class AsyncRuntime(BaseRuntime):
         if event.type in RUNTIME_EVENTS:
             await self.runtime_handle_event(event)
 
-        logger.info(
-            f"{self.log_name} Handling event: EventType={event.type} MsgType={msg_type}"
-        )
+        logger.info(f"{self.log_name} Handling event: EventType={event.type} MsgType={msg_type}")
         self.instance, (responses, more_events) = self.instance.handle_event(event)
         if responses:
             logger.info(f"{self.log_name} Event OutboundMsg={len(responses)}")
@@ -306,9 +288,7 @@ class AsyncRuntime(BaseRuntime):
                 self.events_receive_channel,
             ) = trio.open_memory_channel(40)
             async with self.events_send_channel, self.events_receive_channel:
-                nursery.start_soon(
-                    self.event_controller.run, self.events_send_channel.clone()
-                )
+                nursery.start_soon(self.event_controller.run, self.events_send_channel.clone())
                 await self.events_send_channel.send(EVENT_CONVERSION_TO_FOLLOWER)
                 await self.run_event_handler()
 

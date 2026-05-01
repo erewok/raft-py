@@ -16,6 +16,7 @@ to another as follows:
   - Candidate -> { Follower, Candidate, Leader }
   - Leader ->    { Follower }
 """
+
 from __future__ import annotations
 
 import json
@@ -67,9 +68,7 @@ class BaseServer(Generic[S]):
         self.storage = storage
         self.config = config
         self.node_id = node_id
-        self.all_node_ids = list(
-            filter(lambda el: el != self.node_id, self.config.node_mapping.keys())
-        )
+        self.all_node_ids = list(filter(lambda el: el != self.node_id, self.config.node_mapping.keys()))
         self.quorom: int = (len(self.all_node_ids) // 2) + 1
         this_node = self.config.node_mapping[self.node_id]
         self.label = this_node["label"]
@@ -103,9 +102,7 @@ class BaseServer(Generic[S]):
         return (self.host, self.port)
 
     def save_meta(self):
-        self.storage.save_metadata(
-            json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term})
-        )
+        self.storage.save_metadata(json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}))
 
     def save_log_entry(self):
         self.storage.save(self.log[-1])
@@ -115,9 +112,11 @@ class BaseServer(Generic[S]):
         if self.snapshot_index >= 0:
             # Serialize snapshot state: we store the applied entries up to snapshot_index
             snapshot_data = json.dumps(
-                {"last_included_index": self.snapshot_index,
-                 "last_included_term": self.snapshot_term,
-                 "applied": [e.to_dict() for e in self.applied]}
+                {
+                    "last_included_index": self.snapshot_index,
+                    "last_included_term": self.snapshot_term,
+                    "applied": [e.to_dict() for e in self.applied],
+                }
             ).encode("utf-8")
             self.storage.save_snapshot(snapshot_data, self.snapshot_index, self.snapshot_term)
 
@@ -205,10 +204,7 @@ class Candidate(BaseServer, Generic[S]):
         if event.msg and hasattr(event.msg, "term"):
             event_term = event.msg.term
         responses_events = empty_response()
-        if (
-            event.type == EventType.LeaderAppendLogEntryRpc
-            or event_term > self.current_term
-        ):
+        if event.type == EventType.LeaderAppendLogEntryRpc or event_term > self.current_term:
             self.current_term = event_term
             return (
                 self.convert(Follower),
@@ -224,9 +220,7 @@ class Candidate(BaseServer, Generic[S]):
             leader = self.convert(Leader)
             return (
                 leader,
-                ResponsesEvents(
-                    [], [EVENT_CONVERSION_TO_LEADER, EVENT_START_HEARTBEAT]
-                ),
+                ResponsesEvents([], [EVENT_CONVERSION_TO_LEADER, EVENT_START_HEARTBEAT]),
             )
         if event.type == EventType.ReceiveServerCandidateVote:
             responses_events = self.handle_vote_response(event)
@@ -274,7 +268,8 @@ class Follower(BaseServer, Generic[S]):
         # If the prev_log_index is below our snapshot index, reject so leader sends snapshot
         if self.snapshot_index >= 0 and event.msg.prev_log_index < self.snapshot_index:
             logger.info(
-                f"{self._log_name} prev_log_index ({event.msg.prev_log_index}) < snapshot_index ({self.snapshot_index}), rejecting"
+                f"{self._log_name} prev_log_index ({event.msg.prev_log_index}) "
+                f"< snapshot_index ({self.snapshot_index}), rejecting"
             )
             msg: rpc.RPCMessage = rpc.AppendEntriesResponse(
                 term=self.current_term,
@@ -299,23 +294,17 @@ class Follower(BaseServer, Generic[S]):
             new_commit_index = min(event.msg.leader_commit_index, len(self.log))
             if new_commit_index > self.commit_index:
                 self.commit_index = new_commit_index
-                logger.info(
-                    f"{self._log_name} Committed entries count is now {self.commit_index}"
-                )
+                logger.info(f"{self._log_name} Committed entries count is now {self.commit_index}")
 
                 if self.commit_index > self.last_applied:
-                    entries = self.log.log[
-                        self.last_applied + 1 : self.commit_index + 1
-                    ]
+                    entries = self.log.log[self.last_applied + 1 : self.commit_index + 1]
                     self.applied.extend(entries)
                     logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
 
         msg: rpc.RPCMessage = rpc.AppendEntriesResponse(  # type: ignore
             term=self.current_term,
-            match_index=event.msg.prev_log_index + len(event.msg.entries)
-            if success
-            else -1,
+            match_index=event.msg.prev_log_index + len(event.msg.entries) if success else -1,
             source_node_id=self.node_id,
             success=success,
             dest=event.msg.source,
@@ -365,9 +354,7 @@ class Follower(BaseServer, Generic[S]):
         new_commit_index = min(msg.last_included_index + len(self.log), msg.leader_commit_index)
         if new_commit_index > self.commit_index:
             self.commit_index = new_commit_index
-            logger.info(
-                f"{self._log_name} Committed entries count is now {self.commit_index}"
-            )
+            logger.info(f"{self._log_name} Committed entries count is now {self.commit_index}")
             if self.commit_index > self.last_applied:
                 entries = self.log.log[self.last_applied + 1 : self.commit_index + 1]
                 self.applied.extend(entries)
@@ -393,10 +380,8 @@ class Follower(BaseServer, Generic[S]):
         - The Candidate's Term is >= Follower's term
         """
         logger.info(
-
-                f"{self._log_name} Received request for votes from "
-                f"{event.msg.source} with ID {event.msg.candidate_id}"
-
+            f"{self._log_name} Received request for votes from "
+            f"{event.msg.source} with ID {event.msg.candidate_id}"
         )
         logger.debug(f"{self._log_name} RequestVoteRpc={repr(event.msg)}")
 
@@ -424,9 +409,7 @@ class Follower(BaseServer, Generic[S]):
             source=event.msg.dest,
         )
         self.voted_for = event.msg.candidate_id if grant_vote else self.voted_for
-        logger.info(
-            f"{self._log_name} vote granted to {event.msg.candidate_id}: {grant_vote}"
-        )
+        logger.info(f"{self._log_name} vote granted to {event.msg.candidate_id}: {grant_vote}")
         # We should _not_ trigger an election in this case otherwise we're doing so unecessarily
         # _If_ we need an election, then we should pick it up next time around.
         further_events = []
@@ -493,9 +476,7 @@ class Leader(BaseServer, Generic[S]):
         prev_index = len(self.log) - 1
         prev_term = self.log[prev_index].term if prev_index >= 0 else -1
         # Should always succeed on leader.
-        self.log.append_entries(
-            prev_index=prev_index, prev_term=prev_term, entries=[entry]
-        )
+        self.log.append_entries(prev_index=prev_index, prev_term=prev_term, entries=[entry])
         return empty_response()
 
     def needs_snapshot_for_node(self, node_id: int) -> bool:
@@ -522,9 +503,11 @@ class Leader(BaseServer, Generic[S]):
         else:
             # Serialize the applied state as the snapshot
             snapshot_data = json.dumps(
-                {"last_included_index": self.snapshot_index,
-                 "last_included_term": self.snapshot_term,
-                 "applied": [e.to_dict() for e in self.applied]}
+                {
+                    "last_included_index": self.snapshot_index,
+                    "last_included_term": self.snapshot_term,
+                    "applied": [e.to_dict() for e in self.applied],
+                }
             ).encode("utf-8")
 
         total = len(snapshot_data)
@@ -532,8 +515,8 @@ class Leader(BaseServer, Generic[S]):
         offset = 0
 
         while offset < total:
-            chunk = snapshot_data[offset:offset + chunk_size]
-            done = (offset + chunk_size >= total)
+            chunk = snapshot_data[offset : offset + chunk_size]
+            done = offset + chunk_size >= total
             msg: rpc.RPCMessage = rpc.InstallSnapshotRpc(
                 term=self.current_term,
                 leader_id=self.node_id,
@@ -555,16 +538,12 @@ class Leader(BaseServer, Generic[S]):
         """Handle InstallSnapshotResponse from a follower."""
         node_id = event.msg.source_node_id
         if event.msg.success:
-            logger.info(
-                f"{self._log_name} InstallSnapshot succeeded for node: {node_id}"
-            )
+            logger.info(f"{self._log_name} InstallSnapshot succeeded for node: {node_id}")
             # After snapshot, next_index should point to the first entry after the snapshot
             self.next_index[node_id] = self.snapshot_index + 1
             self.match_index[node_id] = self.snapshot_index
         else:
-            logger.warning(
-                f"{self._log_name} InstallSnapshot failed for node: {node_id}"
-            )
+            logger.warning(f"{self._log_name} InstallSnapshot failed for node: {node_id}")
             # Fall back to trying appendEntries
             self.next_index[node_id] = self.snapshot_index + 1
         return empty_response()
@@ -578,12 +557,8 @@ class Leader(BaseServer, Generic[S]):
         """
         node_id = event.msg.source_node_id
         if event.msg.success:
-            logger.info(
-                f"{self._log_name} Append entries request was successful for node: {node_id}"
-            )
-            self.match_index[node_id] = max(
-                event.msg.match_index, self.match_index[node_id]
-            )
+            logger.info(f"{self._log_name} Append entries request was successful for node: {node_id}")
+            self.match_index[node_id] = max(event.msg.match_index, self.match_index[node_id])
             self.next_index[node_id] = event.msg.match_index + 1
 
             # determine number of committed entries
@@ -591,21 +566,15 @@ class Leader(BaseServer, Generic[S]):
             num_committed = matched[len(matched) // 2]  # median is the answer!
             if num_committed > self.commit_index:
                 self.commit_index = num_committed
-                logger.info(
-                    f"{self._log_name} Committed entries count is now {self.commit_index}"
-                )
+                logger.info(f"{self._log_name} Committed entries count is now {self.commit_index}")
                 # Here is where committed log entries would be "applied" to the application.
                 if self.commit_index > self.last_applied:
-                    entries = self.log.log[
-                        self.last_applied + 1 : self.commit_index + 1
-                    ]
+                    entries = self.log.log[self.last_applied + 1 : self.commit_index + 1]
                     self.applied.extend(entries)
                     logger.info(f"{self._log_name} AppliedEntries={entries}")
                     self.last_applied = self.commit_index
         else:
-            logger.warning(
-                f"{self._log_name} Append entries Failed for node: {node_id}"
-            )
+            logger.warning(f"{self._log_name} Append entries Failed for node: {node_id}")
             self.next_index[node_id] = self.next_index[node_id] - 1
         return empty_response()
 
@@ -652,19 +621,12 @@ class Leader(BaseServer, Generic[S]):
         responses = empty_response()
         event_msg_type = event.msg.type if event.msg else "none"
         event_term = event.msg.term if event.msg and hasattr(event.msg, "term") else -1
-        logger.info(
-
-                f"{self._log_name} Received Event with msg type "
-                f"{event_msg_type} and term {event_term}"
-
-        )
+        logger.info(f"{self._log_name} Received Event with msg type {event_msg_type} and term {event_term}")
         if event_term > self.current_term:
             # According to the paper, the server immediately steps down in this case
             logger.warning(
-
-                    f"{self._log_name} with term *{self.current_term}* is stepping down "
-                    f"after message with term *{event_term}* received"
-
+                f"{self._log_name} with term *{self.current_term}* is stepping down "
+                f"after message with term *{event_term}* received"
             )
             self.current_term = event_term
             return (

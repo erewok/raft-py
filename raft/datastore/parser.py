@@ -49,11 +49,7 @@ def command_to_json(action):
         if len(rest) > 0:
             logger.warning(f"Dropping remaining instructions {', '.join(rest)}")
 
-    if (
-        not action
-        or not isinstance(action, tuple)
-        or not isinstance(action[0], Command)
-    ):
+    if not action or not isinstance(action, tuple) or not isinstance(action[0], Command):
         return "Command is not parseable"
     (cmd, parts) = action
 
