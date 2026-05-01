@@ -49,6 +49,19 @@ class Log:
     def flush_to_storage(self, storage):
         pass
 
+    def truncate_to(self, index: int):
+        """Remove all log entries up to and including `index`.
+
+        Called after a snapshot is applied — those entries are now
+        represented in the snapshot state.
+        """
+        if index < 0:
+            return
+        if index >= len(self.log):
+            self.log.clear()
+        else:
+            del self.log[: index + 1]
+
     def append_entries(
         self, prev_index: int = -1, prev_term: int = -1, entries: list[LogEntry] = None
     ) -> bool:

@@ -17,6 +17,8 @@ class MsgType(enum.IntEnum):
     AppendEntriesRequest = 3
     AppendEntriesResponse = 4
     ClientRequest = 5
+    InstallSnapshotRequest = 6
+    InstallSnapshotResponse = 7
     DEBUG_MESSAGE = 99
 
     def __str__(self):
@@ -42,6 +44,10 @@ def parse_msg(msg_bytes: bytes):
             cmd=data.get("body", "").encode("utf-8"),
             source=tuple(data.get("callback_addr", [])),
         )
+    elif msg_type == MsgType.InstallSnapshotRequest:
+        return InstallSnapshotRpc.from_dict(data)
+    elif msg_type == MsgType.InstallSnapshotResponse:
+        return InstallSnapshotResponse.from_dict(data)
     elif msg_type == MsgType.DEBUG_MESSAGE:
         return Debug()
 
@@ -314,11 +320,147 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
         )
 
 
+class InstallSnapshotRpc(RpcBase, Generic[RPC]):
+    """Leader → Follower: replicate snapshot data.
+
+    Used when a follower's log is too far behind and the leader needs to
+    send a snapshot instead of individual log entries.
+    """
+
+    __slots__ = [
+        "term",
+        "leader_id",
+        "last_included_index",
+        "last_included_term",
+        "offset",
+        "data",
+        "done",
+        "leader_commit_index",
+        "type",
+        "dest",
+        "source",
+    ]
+
+    def __init__(
+        self,
+        term: int = -1,
+        leader_id: int = -1,
+        last_included_index: int = -1,
+        last_included_term: int = -1,
+        offset: int = 0,
+        data: bytes = b"",
+        done: bool = False,
+        leader_commit_index: int = -1,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
+    ):
+        self.term = term
+        self.leader_id = leader_id
+        self.last_included_index = last_included_index
+        self.last_included_term = last_included_term
+        self.offset = offset
+        self.data = data
+        self.done = done
+        self.leader_commit_index = leader_commit_index
+        self.dest = dest
+        self.source = source
+        self.type = MsgType.InstallSnapshotRequest
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "term": self.term,
+            "leader_id": self.leader_id,
+            "last_included_index": self.last_included_index,
+            "last_included_term": self.last_included_term,
+            "offset": self.offset,
+            "data": self.data.hex() if self.data else "",
+            "done": self.done,
+            "leader_commit_index": self.leader_commit_index,
+            "type": int(MsgType.InstallSnapshotRequest),
+            "dest": self.dest,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        if data.get("type") != MsgType.InstallSnapshotRequest:
+            raise ValueError("Msg is not an InstallSnapshotRequest")
+        raw_data = data.get("data", "")
+        return cls(
+            **{
+                "term": data.get("term", -1),
+                "leader_id": data.get("leader_id", -1),
+                "last_included_index": data.get("last_included_index", -1),
+                "last_included_term": data.get("last_included_term", -1),
+                "offset": data.get("offset", 0),
+                "data": bytes.fromhex(raw_data) if raw_data else b"",
+                "done": data.get("done", False),
+                "leader_commit_index": data.get("leader_commit_index", -1),
+                "dest": tuple(data.get("dest")),
+                "source": tuple(data.get("source")),
+            }
+        )
+
+
+class InstallSnapshotResponse(RpcBase, Generic[RPC]):
+    """Follower → Leader: acknowledge snapshot installation."""
+
+    __slots__ = [
+        "term",
+        "success",
+        "type",
+        "source_node_id",
+        "dest",
+        "source",
+    ]
+
+    def __init__(
+        self,
+        term: int = -1,
+        source_node_id: int = -1,
+        success: bool = False,
+        dest: transport.Address | None = None,
+        source: transport.Address | None = None,
+    ):
+        self.term = term
+        self.source_node_id = source_node_id
+        self.success = success
+        self.dest = dest
+        self.source = source
+        self.type = MsgType.InstallSnapshotResponse
+
+    def to_dict(self) -> dict:
+        return {
+            "term": self.term,
+            "success": self.success,
+            "source_node_id": self.source_node_id,
+            "type": int(self.type),
+            "dest": self.dest,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        if data.get("type") != MsgType.InstallSnapshotResponse:
+            raise ValueError("Msg is not an InstallSnapshotResponse")
+        return cls(
+            **{
+                "term": data.get("term", -1),
+                "success": data.get("success", False),
+                "source_node_id": data.get("source_node_id", -1),
+                "dest": tuple(data.get("dest")),
+                "source": tuple(data.get("source")),
+            }
+        )
+
+
 RPCMessage: TypeAlias = (
     RequestVoteResponse[RPC]
     | RequestVoteRpc[RPC]
     | AppendEntriesResponse[RPC]
     | AppendEntriesRpc[RPC]
+    | InstallSnapshotResponse[RPC]
+    | InstallSnapshotRpc[RPC]
     | Debug[RPC]
     | ClientRequest[RPC]
 )

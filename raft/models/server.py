@@ -87,7 +87,12 @@ class BaseServer(Generic[S]):
             "transfer_attrs",
             "current_term",
             "log",
+            "snapshot_index",
+            "snapshot_term",
         )
+        # Snapshot state — persisted alongside metadata
+        self.snapshot_index: int = -1
+        self.snapshot_term: int = -1
 
     @classmethod
     def log_name(cls):
@@ -104,6 +109,17 @@ class BaseServer(Generic[S]):
 
     def save_log_entry(self):
         self.storage.save(self.log[-1])
+
+    def save_snapshot(self):
+        """Persist the current snapshot state to storage."""
+        if self.snapshot_index >= 0:
+            # Serialize snapshot state: we store the applied entries up to snapshot_index
+            snapshot_data = json.dumps(
+                {"last_included_index": self.snapshot_index,
+                 "last_included_term": self.snapshot_term,
+                 "applied": [e.to_dict() for e in self.applied]}
+            ).encode("utf-8")
+            self.storage.save_snapshot(snapshot_data, self.snapshot_index, self.snapshot_term)
 
     def convert(self, target_class) -> S:
         logger.warning(f"Converting from {self._log_name} to {target_class.log_name}")
@@ -254,6 +270,22 @@ class Follower(BaseServer, Generic[S]):
         logger.info(
             f"{self._log_name} Received new append entries request with {len(event.msg.entries)} entries"
         )
+
+        # If the prev_log_index is below our snapshot index, reject so leader sends snapshot
+        if self.snapshot_index >= 0 and event.msg.prev_log_index < self.snapshot_index:
+            logger.info(
+                f"{self._log_name} prev_log_index ({event.msg.prev_log_index}) < snapshot_index ({self.snapshot_index}), rejecting"
+            )
+            msg: rpc.RPCMessage = rpc.AppendEntriesResponse(
+                term=self.current_term,
+                match_index=-1,
+                source_node_id=self.node_id,
+                success=False,
+                dest=event.msg.source,
+                source=event.msg.dest,
+            )
+            return ResponsesEvents([msg], [Event(EventType.ResetElectionTimeout, None)])
+
         success = self.log.append_entries(  # type: ignore
             prev_term=event.msg.prev_log_term,
             prev_index=event.msg.prev_log_index,
@@ -295,6 +327,64 @@ class Follower(BaseServer, Generic[S]):
         )
 
         return ResponsesEvents([msg], [Event(EventType.ResetElectionTimeout, None)])
+
+    def handle_install_snapshot(self, event: Event) -> ResponsesEvents:
+        """Handle an InstallSnapshot RPC from the leader (Raft §5.3).
+
+        The leader sends this when a follower's log is too far behind.
+        The follower replaces its entire log with the snapshot state,
+        then applies any entries after the snapshot's last_included_index.
+        """
+        msg = event.msg  # type: InstallSnapshotRpc
+        logger.info(
+            f"{self._log_name} Received InstallSnapshot from leader {msg.leader_id} "
+            f"(last_included_index={msg.last_included_index}, "
+            f"last_included_term={msg.last_included_term}, "
+            f"offset={msg.offset}, done={msg.done})"
+        )
+
+        # Step down if leader's term is higher
+        if msg.term > self.current_term:
+            self.current_term = msg.term
+            self.voted_for = None
+            self.save_meta()
+
+        # Accept the snapshot: replace entire log
+        self.log.truncate_to(msg.last_included_index)
+        self.snapshot_index = msg.last_included_index
+        self.snapshot_term = msg.last_included_term
+
+        # Persist the snapshot data
+        if msg.done:
+            self.storage.save_snapshot(msg.data, msg.last_included_index, msg.last_included_term)
+            # Clear old log entries since they're now in the snapshot
+            self.storage.clear_log()
+
+        # The leader's commit_index tells us what's committed
+        # Apply entries up to the leader's commit_index
+        new_commit_index = min(msg.last_included_index + len(self.log), msg.leader_commit_index)
+        if new_commit_index > self.commit_index:
+            self.commit_index = new_commit_index
+            logger.info(
+                f"{self._log_name} Committed entries count is now {self.commit_index}"
+            )
+            if self.commit_index > self.last_applied:
+                entries = self.log.log[self.last_applied + 1 : self.commit_index + 1]
+                self.applied.extend(entries)
+                logger.info(f"{self._log_name} AppliedEntries={entries}")
+                self.last_applied = self.commit_index
+
+        # Acknowledge the snapshot
+        resp: rpc.RPCMessage = rpc.InstallSnapshotResponse(
+            term=self.current_term,
+            source_node_id=self.node_id,
+            success=True,
+            dest=msg.source,
+            source=msg.dest,
+        )
+
+        logger.info(f"{self._log_name} InstallSnapshot accepted (done={msg.done})")
+        return ResponsesEvents([resp], [Event(EventType.ResetElectionTimeout, None)])
 
     def handle_request_vote_rpc(self, event: Event) -> ResponsesEvents:
         """
@@ -361,6 +451,8 @@ class Follower(BaseServer, Generic[S]):
             return new_instance, responses_events
         if event.type == EventType.LeaderAppendLogEntryRpc:
             responses_events = self.handle_append_entries_message(event)
+        elif event.type == EventType.InstallSnapshotRequest:
+            responses_events = self.handle_install_snapshot(event)
         elif event.type == EventType.CandidateRequestVoteRpc:
             responses_events = self.handle_request_vote_rpc(event)
         return self, responses_events
@@ -404,6 +496,77 @@ class Leader(BaseServer, Generic[S]):
         self.log.append_entries(
             prev_index=prev_index, prev_term=prev_term, entries=[entry]
         )
+        return empty_response()
+
+    def needs_snapshot_for_node(self, node_id: int) -> bool:
+        """Check if a follower needs a snapshot instead of log entries."""
+        if self.snapshot_index < 0:
+            return False
+        return self.next_index[node_id] <= self.snapshot_index
+
+    def construct_snapshot_rpc(self, node_id: int, chunk_size: int = 4096) -> list[transport.Request]:
+        """Construct InstallSnapshot RPC(s) for a follower.
+
+        If the snapshot is large, it's split into chunks using offset/done.
+        """
+        if self.snapshot_index < 0:
+            return []
+
+        addr = self.config.node_mapping[node_id]["addr"]
+
+        # Load snapshot from storage if available, otherwise serialize applied state
+        snapshot_data = b""
+        stored = self.storage.load_snapshot()
+        if stored:
+            snapshot_data = stored[0]
+        else:
+            # Serialize the applied state as the snapshot
+            snapshot_data = json.dumps(
+                {"last_included_index": self.snapshot_index,
+                 "last_included_term": self.snapshot_term,
+                 "applied": [e.to_dict() for e in self.applied]}
+            ).encode("utf-8")
+
+        total = len(snapshot_data)
+        all_msgs: list[transport.Request] = []
+        offset = 0
+
+        while offset < total:
+            chunk = snapshot_data[offset:offset + chunk_size]
+            done = (offset + chunk_size >= total)
+            msg: rpc.RPCMessage = rpc.InstallSnapshotRpc(
+                term=self.current_term,
+                leader_id=self.node_id,
+                last_included_index=self.snapshot_index,
+                last_included_term=self.snapshot_term,
+                offset=offset,
+                data=chunk,
+                done=done,
+                leader_commit_index=self.commit_index,
+                dest=addr,
+                source=self.address,
+            )
+            all_msgs.append(msg)  # type: ignore
+            offset += chunk_size
+
+        return all_msgs
+
+    def handle_install_snapshot_response(self, event: Event) -> ResponsesEvents:
+        """Handle InstallSnapshotResponse from a follower."""
+        node_id = event.msg.source_node_id
+        if event.msg.success:
+            logger.info(
+                f"{self._log_name} InstallSnapshot succeeded for node: {node_id}"
+            )
+            # After snapshot, next_index should point to the first entry after the snapshot
+            self.next_index[node_id] = self.snapshot_index + 1
+            self.match_index[node_id] = self.snapshot_index
+        else:
+            logger.warning(
+                f"{self._log_name} InstallSnapshot failed for node: {node_id}"
+            )
+            # Fall back to trying appendEntries
+            self.next_index[node_id] = self.snapshot_index + 1
         return empty_response()
 
     def handle_append_entries_response(self, event: Event) -> ResponsesEvents:
@@ -460,6 +623,12 @@ class Leader(BaseServer, Generic[S]):
         all_msgs: list[transport.Request] = []
 
         for node_id in self.all_node_ids:
+            # Check if this follower needs a snapshot instead
+            if self.needs_snapshot_for_node(node_id):
+                snapshot_msgs = self.construct_snapshot_rpc(node_id)
+                all_msgs.extend(snapshot_msgs)
+                continue
+
             prev_log_idx, prev_term, entries = self.get_log_entries_for_node(node_id)
             addr = self.config.node_mapping[node_id]["addr"]
             msg: rpc.RPCMessage = rpc.AppendEntriesRpc(
@@ -505,6 +674,8 @@ class Leader(BaseServer, Generic[S]):
 
         if event.type == EventType.AppendEntryConfirm:
             responses = self.handle_append_entries_response(event)
+        elif event.type == EventType.InstallSnapshotResponse:
+            responses = self.handle_install_snapshot_response(event)
         elif event.type == EventType.HeartbeatTime:
             responses = self.handle_heartbeat_send(event)
         elif event.type == EventType.ClientAppendRequest:

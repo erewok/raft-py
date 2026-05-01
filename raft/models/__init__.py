@@ -34,6 +34,8 @@ class EventType(enum.IntEnum):
     ConversionToFollower = 16
 
     StartHeartbeat = 25
+    InstallSnapshotRequest = 26
+    InstallSnapshotResponse = 27
     DEBUG_REQUEST = 99
 
     def __str__(self):
@@ -85,6 +87,10 @@ def parse_msg_to_event(msg: bytes) -> Event | None:
         return Event(EventType.ReceiveServerCandidateVote, result)
     elif result.type == MsgType.ClientRequest:
         return Event(EventType.ClientAppendRequest, result)
+    elif result.type == MsgType.InstallSnapshotRequest:
+        return Event(EventType.InstallSnapshotRequest, result)
+    elif result.type == MsgType.InstallSnapshotResponse:
+        return Event(EventType.InstallSnapshotResponse, result)
     elif result.type == MsgType.DEBUG_MESSAGE:
         return Event(EventType.DEBUG_REQUEST, result)
     return None
