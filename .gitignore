@@ -133,3 +133,6 @@ dmypy.json
 tmp/
 todo.md
 *IMPLEMENTATION*
+.bmo/
+.pi/
+

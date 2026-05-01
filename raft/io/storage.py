@@ -407,14 +407,61 @@ class FileStorage(BaseStorage):
         return deleted_count
 
     def compact_log(self, up_to_index: int) -> int:
-        """Remove log entries up to the specified index (inclusive)"""
-        # This is a simplified implementation - in a real system you'd want
-        # more sophisticated log management
-        # For now, we'll just log the operation since the existing log structure
-        # is complex and would need major refactoring
-        logger.info(f"Log compaction requested up to index {up_to_index}")
-        # TODO: Implement actual log compaction for FileStorage
-        return 0
+        """Remove log entries up to the specified index (inclusive).
+
+        Reads all entries from the hierarchical file structure, keeps only
+        entries after up_to_index, rewrites the files, and updates the
+        stored_item_count counter.
+        """
+        if up_to_index < 0:
+            return 0
+
+        # Collect all log entry files
+        all_entries: list[bytes] = []
+        files_to_remove: list[str] = []
+
+        data_dir = self.data_filepath
+        if not os.path.exists(data_dir):
+            return 0
+
+        for dirname in sorted(os.listdir(data_dir)):
+            dirpath = os.path.join(data_dir, dirname)
+            if not os.path.isdir(dirpath):
+                continue
+            for filename in sorted(os.listdir(dirpath)):
+                filepath = os.path.join(dirpath, filename)
+                if os.path.isfile(filepath):
+                    files_to_remove.append(filepath)
+                    with open(filepath, "rb") as f:
+                        for line in f:
+                            stripped = line.strip()
+                            if stripped:
+                                all_entries.append(stripped)
+
+        # Keep entries after up_to_index (0-based index)
+        entries_to_keep = all_entries[up_to_index + 1 :]
+        removed_count = len(all_entries) - len(entries_to_keep)
+
+        if removed_count <= 0:
+            return 0
+
+        # Remove old files
+        for filepath in files_to_remove:
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+
+        # Rewrite kept entries into new files
+        if entries_to_keep:
+            for entry in entries_to_keep:
+                self.save_log_entry(entry)
+        else:
+            # Reset counter if all entries were compacted
+            self.stored_item_count = 0
+
+        logger.info(f"Compacted FileStorage log: removed {removed_count} entries, {len(entries_to_keep)} remaining")
+        return removed_count
 
 
 class SqliteStorage(BaseStorage):
@@ -705,6 +752,13 @@ class SqliteStorage(BaseStorage):
             "db_path": self.db_path,
         }
 
+    def vacuum(self):
+        """Reclaim unused space in the SQLite database."""
+        conn = self._get_connection()
+        conn.execute("VACUUM")
+        conn.commit()
+        logger.info(f"Vacuumed SQLite database for node {self.node_id}")
+
     def close(self):
         """Close database connections and clean up resources."""
         if hasattr(self._local, "connection") and self._local.connection:
@@ -771,12 +825,9 @@ class AsyncSqliteStorage(SqliteStorage):
 
     async def compact_log(self, up_to_index: int) -> int:
         """Remove log entries up to the specified index (inclusive)."""
-
-        result = await trio.to_thread.run_sync(super().compact_log, up_to_index)
-
-        # Run VACUUM separately as it can't be in a transaction
-        await self.vacuum()
-        return result
+        # SqliteStorage.compact_log already runs VACUUM after deletion,
+        # so no need to call self.vacuum() separately
+        return await trio.to_thread.run_sync(super().compact_log, up_to_index)
 
     async def vacuum(self):
         return await trio.to_thread.run_sync(super().vacuum)
@@ -972,10 +1023,4 @@ class AsyncFileStorage(BaseStorage):
 
     async def compact_log(self, up_to_index: int) -> int:
         """Remove log entries up to the specified index (inclusive) asynchronously"""
-        # This is a simplified implementation - in a real system you'd want
-        # more sophisticated log management
-        # For now, we'll just log the operation since the existing log structure
-        # is complex and would need major refactoring
-        logger.info(f"Async log compaction requested up to index {up_to_index}")
-        # TODO: Implement actual log compaction for AsyncFileStorage
-        return 0
+        return await trio.to_thread.run_sync(super().compact_log, up_to_index)

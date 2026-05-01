@@ -1,10 +1,32 @@
 """Tests for server snapshot integration."""
 
+import configparser
+import json
+import os
+
 from raft.io.storage import InMemoryStorage
 from raft.models.config import Config
 from raft.models.log import LogEntry
 from raft.models.server import Follower, Leader
 from raft.models.snapshot import KeyValueStateMachine
+
+test_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+root_dir = os.path.dirname(test_dir)
+
+
+def _make_config(node_count=3, snapshot_threshold=1000):
+    """Create a Config object for testing."""
+    _conf = configparser.ConfigParser()
+    _conf.read(os.path.join(root_dir, "raft.ini"))
+    _conf.set("Cluster", "NodeCount", str(node_count))
+    _conf.set("Cluster", "SnapshotThreshold", str(snapshot_threshold))
+    # Remove extra node sections to avoid errors
+    for n in range(node_count + 1, 6):
+        if f"Node.{_conf['Nodes'].get(f'Node{n}', '')}" in _conf:
+            del _conf[f"Node.{_conf['Nodes'].get(f'Node{n}', '')}"]
+        if f"Node{n}" in _conf["Nodes"]:
+            del _conf["Nodes"][f"Node{n}"]
+    return Config(_conf)
 
 
 class TestServerSnapshotIntegration:
@@ -13,18 +35,18 @@ class TestServerSnapshotIntegration:
     def test_leader_creates_snapshot_when_threshold_exceeded(self):
         """Test that a leader creates snapshots when log size exceeds threshold."""
         # Setup server with small snapshot threshold
-        storage = InMemoryStorage()
+        config = _make_config(node_count=3, snapshot_threshold=3)
+        storage = InMemoryStorage(1, config)
         state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2, 3], log_compaction_threshold=3)
 
         leader = Leader(node_id=1, config=config, storage=storage, state_machine=state_machine)
 
         # Add some entries to the log and apply them
         entries = [
-            LogEntry(term=1, command={"op": "set", "key": "a", "value": "1"}),
-            LogEntry(term=1, command={"op": "set", "key": "b", "value": "2"}),
-            LogEntry(term=1, command={"op": "set", "key": "c", "value": "3"}),
-            LogEntry(term=1, command={"op": "set", "key": "d", "value": "4"}),
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "a", "value": "1"}).encode()),
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "b", "value": "2"}).encode()),
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "c", "value": "3"}).encode()),
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "d", "value": "4"}).encode()),
         ]
 
         for entry in entries:
@@ -53,24 +75,25 @@ class TestServerSnapshotIntegration:
         # Verify state machine state was captured
         snapshot = storage.load_snapshot(snapshot_id)
         assert snapshot is not None
-        assert snapshot.data["a"] == "1"
-        assert snapshot.data["b"] == "2"
-        assert snapshot.data["c"] == "3"
-        assert snapshot.data["d"] == "4"
+        snapshot_data = json.loads(snapshot.state_machine_data.decode())
+        assert snapshot_data["a"] == "1"
+        assert snapshot_data["b"] == "2"
+        assert snapshot_data["c"] == "3"
+        assert snapshot_data["d"] == "4"
 
     def test_server_restores_from_snapshot_on_init(self):
         """Test that servers restore state from snapshots during initialization."""
         # Setup storage with existing snapshot
-        storage = InMemoryStorage()
+        config = _make_config(node_count=3)
+        storage = InMemoryStorage(1, config)
         state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2, 3])
 
         # Create a leader and make a snapshot
         leader = Leader(node_id=1, config=config, storage=storage, state_machine=state_machine)
 
         # Add entries and create snapshot
         entries = [
-            LogEntry(term=1, command={"op": "set", "key": "restore_test", "value": "success"}),
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "restore_test", "value": "success"}).encode()),
         ]
 
         for entry in entries:
@@ -90,15 +113,15 @@ class TestServerSnapshotIntegration:
 
     def test_log_compaction_after_snapshot(self):
         """Test that logs are compacted after snapshot creation."""
-        storage = InMemoryStorage()
+        config = _make_config(node_count=3)
+        storage = InMemoryStorage(1, config)
         state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2, 3])
 
         leader = Leader(node_id=1, config=config, storage=storage, state_machine=state_machine)
 
         # Add many entries
         entries = [
-            LogEntry(term=1, command={"op": "set", "key": f"key_{i}", "value": f"val_{i}"}) for i in range(10)
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": f"key_{i}", "value": f"val_{i}"}).encode()) for i in range(10)
         ]
 
         for entry in entries:
@@ -120,24 +143,25 @@ class TestServerSnapshotIntegration:
 
         # Verify snapshot contains all the data
         snapshot = storage.load_snapshot(snapshot_id)
+        snapshot_data = json.loads(snapshot.state_machine_data.decode())
         for i in range(10):
-            assert snapshot.data[f"key_{i}"] == f"val_{i}"
+            assert snapshot_data[f"key_{i}"] == f"val_{i}"
 
     def test_state_machine_integration_with_get_applied_entry_result(self):
         """Test that get_applied_entry_result works with state machine."""
-        storage = InMemoryStorage()
+        config = _make_config(node_count=3)
+        storage = InMemoryStorage(1, config)
         state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2, 3])
 
         leader = Leader(node_id=1, config=config, storage=storage, state_machine=state_machine)
 
         # Add a GET entry
-        get_entry = LogEntry(term=1, command={"op": "get", "key": "test_key"})
+        get_entry = LogEntry(term=1, data=json.dumps({"op": "get", "key": "test_key"}).encode())
         leader.log.append_entries([get_entry])
 
         # Set a value first
         state_machine.apply_entry(
-            LogEntry(term=1, command={"op": "set", "key": "test_key", "value": "test_value"})
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": "test_key", "value": "test_value"}).encode())
         )
 
         # Test get_applied_entry_result
@@ -145,6 +169,6 @@ class TestServerSnapshotIntegration:
         assert result == "test_value"
 
         # Test with non-existent key
-        get_missing = LogEntry(term=1, command={"op": "get", "key": "missing_key"})
+        get_missing = LogEntry(term=1, data=json.dumps({"op": "get", "key": "missing_key"}).encode())
         result = leader.get_applied_entry_result(get_missing)
         assert result is None

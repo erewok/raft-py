@@ -369,7 +369,8 @@ class Follower(BaseServer, Generic[S]):
             prev_index=event.msg.prev_log_index,
             entries=event.msg.entries,
         )
-        self.voted_for = None  # This looks like a great place for bugs
+        # voted_for is only cleared when term changes (Raft §5.2)
+        # It is NOT cleared on every successful AppendEntries
         if success:
             # We have a leader if we have received this event
             self.known_leader_node_id = event.msg.leader_id  # type: ignore
@@ -484,22 +485,12 @@ class Follower(BaseServer, Generic[S]):
             )
             return ResponsesEvents([response], [])
 
-        # Update current term and known leader
-        if event.msg.term > self.current_term:
-            self.current_term = event.msg.term
-            self.voted_for = None
-            self.storage.save_state(self.current_term, self.voted_for)
-
         self.known_leader_node_id = event.msg.leader_id
 
         try:
-            # Create snapshot object from received data
-            import json
-
-            snapshot_data = json.loads(event.msg.data.decode("utf-8"))
-
-            # Restore state machine from snapshot
-            self.state_machine.restore_snapshot(snapshot_data)
+            # Restore state machine from snapshot data (raw bytes)
+            # state_machine_data is already serialized bytes from create_snapshot()
+            self.state_machine.restore_from_snapshot(event.msg.data)
 
             # Update last_snapshot tracking
             self.last_snapshot_index = event.msg.last_included_index
@@ -516,6 +507,15 @@ class Follower(BaseServer, Generic[S]):
 
             # Update applied state
             self.last_applied = max(self.last_applied, event.msg.last_included_index)
+
+            # Update current term and known leader AFTER successful restoration
+            # (Raft §5.1: term update must not precede state machine update)
+            if event.msg.term > self.current_term:
+                self.current_term = event.msg.term
+                self.voted_for = None
+                self.storage.save_metadata(
+                    json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}).encode()
+                )
 
             last_index = event.msg.last_included_index
             logger.info(f"{self._log_name} Successfully installed snapshot up to index {last_index}")
@@ -622,6 +622,19 @@ class Leader(BaseServer, Generic[S]):
         """Handle response to InstallSnapshot RPC."""
         node_id = event.msg.source_node_id if hasattr(event.msg, "source_node_id") else -1
 
+        # Per Raft §5.1: if response has higher term, step down
+        if hasattr(event.msg, "term") and event.msg.term > self.current_term:
+            logger.info(
+                f"{self._log_name} InstallSnapshot response has higher term {event.msg.term}, "
+                f"stepping down from leader to follower"
+            )
+            self.current_term = event.msg.term
+            self.voted_for = None
+            self.storage.save_metadata(
+                json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}).encode()
+            )
+            return empty_response()
+
         if not hasattr(event.msg, "success"):
             logger.warning(f"{self._log_name} Invalid InstallSnapshot response from node {node_id}")
             return empty_response()
@@ -703,7 +716,7 @@ class Leader(BaseServer, Generic[S]):
 
         # For now, send the entire snapshot in one message (no chunking)
         # In production, you'd want to chunk large snapshots
-        snapshot_data = json.dumps(snapshot.data).encode("utf-8")
+        snapshot_data = snapshot.state_machine_data
 
         logger.info(
             f"{self._log_name} Sending snapshot to node {node_id} "
