@@ -110,7 +110,16 @@ class BaseServer(Generic[S]):
         return (self.host, self.port)
 
     def save_meta(self):
-        self.storage.save_metadata(json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}))
+        self.storage.save_metadata(
+            json.dumps(
+                {
+                    "votedFor": self.voted_for,
+                    "currentTerm": self.current_term,
+                    "lastSnapshotIndex": self.last_snapshot_index,
+                    "lastSnapshotTerm": self.last_snapshot_term,
+                }
+            ).encode()
+        )
 
     def save_log_entry(self):
         self.storage.save(self.log[-1])
@@ -149,8 +158,11 @@ class BaseServer(Generic[S]):
                 if snapshot.last_included_index > self.last_applied:
                     self.last_applied = snapshot.last_included_index
 
-                # Compact log entries that are now in snapshot
-                self.storage.compact_log(snapshot.last_included_index)
+                # Do NOT compact the log here. Compacting during recovery would shift
+                # the in-memory log to 0-based while last_snapshot_index is I, causing
+                # AppendEntries with prev_log_index=I to miss the sentinel entry and
+                # trigger an infinite reject→decrement→snapshot cycle. Compaction is
+                # deferred to the next snapshot creation when the log offset is updated.
 
                 logger.info(
                     f"Restored from snapshot {metadata.snapshot_id} "
@@ -187,9 +199,10 @@ class BaseServer(Generic[S]):
             # Save snapshot
             snapshot_id = self.storage.save_snapshot(snapshot)
 
-            # Update tracking variables
+            # Update tracking variables and persist atomically with term/votedFor
             self.last_snapshot_index = snapshot.last_included_index
             self.last_snapshot_term = snapshot.last_included_term
+            self.save_meta()
 
             # Compact log (remove entries now in snapshot)
             self.storage.compact_log(snapshot.last_included_index)
@@ -485,37 +498,31 @@ class Follower(BaseServer, Generic[S]):
             )
             return ResponsesEvents([response], [])
 
+        # Advance term BEFORE any state changes (Raft §5.1)
+        if event.msg.term > self.current_term:
+            self.current_term = event.msg.term
+            self.voted_for = None
+            self.storage.save_metadata(
+                json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}).encode()
+            )
+
         self.known_leader_node_id = event.msg.leader_id
 
         try:
-            # Restore state machine from snapshot data (raw bytes)
-            # state_machine_data is already serialized bytes from create_snapshot()
+            # restore_from_snapshot must be first: if it raises, no tracking state is mutated
+            # and the leader's retry will find the follower in a clean state (idempotency).
             self.state_machine.restore_from_snapshot(event.msg.data)
 
-            # Update last_snapshot tracking
+            # All mutations below are all-or-nothing after a successful restore.
             self.last_snapshot_index = event.msg.last_included_index
             self.last_snapshot_term = event.msg.last_included_term
 
-            # Discard any existing log entries up to the snapshot point
-            # and compact log if we have one that overlaps
             if len(self.log.log) > event.msg.last_included_index:
-                # Keep entries after the snapshot
                 self.log.log = self.log.log[event.msg.last_included_index + 1 :]
             else:
-                # Snapshot is ahead of our log, clear it
                 self.log.log = []
 
-            # Update applied state
             self.last_applied = max(self.last_applied, event.msg.last_included_index)
-
-            # Update current term and known leader AFTER successful restoration
-            # (Raft §5.1: term update must not precede state machine update)
-            if event.msg.term > self.current_term:
-                self.current_term = event.msg.term
-                self.voted_for = None
-                self.storage.save_metadata(
-                    json.dumps({"votedFor": self.voted_for, "currentTerm": self.current_term}).encode()
-                )
 
             last_index = event.msg.last_included_index
             logger.info(f"{self._log_name} Successfully installed snapshot up to index {last_index}")
@@ -562,6 +569,11 @@ class Leader(BaseServer, Generic[S]):
         # volatile (from the raft paper)
         self.next_index = {k: self.last_applied + 1 for k in self.all_node_ids}
         self.match_index = {k: 0 for k in self.all_node_ids}
+        # Tracks last_included_index of the snapshot sent to each node so that
+        # handle_install_snapshot_response uses the sent index, not the current one.
+        # Not in transfer_attrs — in-flight snapshot tracking is scoped to this
+        # leader's term; a new leader after step-down starts fresh.
+        self.snapshot_sent_index: dict[int, int] = {}
         # implementation specific
         self.consensus_threshold = (len(self.all_node_ids) // 2) + 1
         self._log_name = self.log_name
@@ -640,22 +652,20 @@ class Leader(BaseServer, Generic[S]):
             return empty_response()
 
         if event.msg.success:
-            # Snapshot was successfully installed
-            # Update next_index to the end of the snapshot
-            if hasattr(event.msg, "bytes_stored") and event.msg.bytes_stored > 0:
-                # Get latest snapshot metadata to know where to set next_index
-                latest_snapshot_metadata = self.storage.get_latest_snapshot_metadata()
-                if latest_snapshot_metadata:
-                    self.next_index[node_id] = latest_snapshot_metadata.last_included_index + 1
-                    self.match_index[node_id] = latest_snapshot_metadata.last_included_index
-                    logger.info(
-                        f"{self._log_name} Node {node_id} successfully installed snapshot, "
-                        f"next_index={self.next_index[node_id]}"
-                    )
-                else:
-                    logger.warning(
-                        f"{self._log_name} No snapshot metadata available after successful install"
-                    )
+            # Use the index we recorded at send time, not the current latest snapshot.
+            # A new snapshot may have been created since the RPC was sent; using the
+            # current latest would incorrectly advance match_index past what the
+            # follower actually installed.
+            sent_index = self.snapshot_sent_index.pop(node_id, None)
+            if sent_index is not None:
+                self.next_index[node_id] = sent_index + 1
+                self.match_index[node_id] = sent_index
+                logger.info(
+                    f"{self._log_name} Node {node_id} successfully installed snapshot, "
+                    f"next_index={self.next_index[node_id]}"
+                )
+            else:
+                logger.warning(f"{self._log_name} No in-flight snapshot index recorded for node {node_id}")
         else:
             logger.warning(f"{self._log_name} InstallSnapshot failed for node {node_id}")
             # Could implement retry logic here
@@ -718,19 +728,21 @@ class Leader(BaseServer, Generic[S]):
         # In production, you'd want to chunk large snapshots
         snapshot_data = snapshot.state_machine_data
 
+        # Record the index we're sending so the response handler uses the correct value
+        # even if a newer snapshot is created before the response arrives.
+        self.snapshot_sent_index[node_id] = snapshot.last_included_index
+
         logger.info(
             f"{self._log_name} Sending snapshot to node {node_id} "
-            f"(last_included_index={snapshot.metadata.last_included_index})"
+            f"(last_included_index={snapshot.last_included_index})"
         )
 
         return rpc.InstallSnapshotRpc(
             term=self.current_term,
             leader_id=self.node_id,
-            last_included_index=snapshot.metadata.last_included_index,
-            last_included_term=snapshot.metadata.last_included_term,
-            offset=0,  # Start of snapshot
+            last_included_index=snapshot.last_included_index,
+            last_included_term=snapshot.last_included_term,
             data=snapshot_data,
-            done=True,  # Entire snapshot in one message
             dest=addr,
             source=self.address,
         )

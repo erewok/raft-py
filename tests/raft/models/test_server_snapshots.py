@@ -93,7 +93,9 @@ class TestServerSnapshotIntegration:
 
         # Add entries and create snapshot
         entries = [
-            LogEntry(term=1, data=json.dumps({"op": "set", "key": "restore_test", "value": "success"}).encode()),
+            LogEntry(
+                term=1, data=json.dumps({"op": "set", "key": "restore_test", "value": "success"}).encode()
+            ),
         ]
 
         for entry in entries:
@@ -121,7 +123,8 @@ class TestServerSnapshotIntegration:
 
         # Add many entries
         entries = [
-            LogEntry(term=1, data=json.dumps({"op": "set", "key": f"key_{i}", "value": f"val_{i}"}).encode()) for i in range(10)
+            LogEntry(term=1, data=json.dumps({"op": "set", "key": f"key_{i}", "value": f"val_{i}"}).encode())
+            for i in range(10)
         ]
 
         for entry in entries:
@@ -161,7 +164,9 @@ class TestServerSnapshotIntegration:
 
         # Set a value first
         state_machine.apply_entry(
-            LogEntry(term=1, data=json.dumps({"op": "set", "key": "test_key", "value": "test_value"}).encode())
+            LogEntry(
+                term=1, data=json.dumps({"op": "set", "key": "test_key", "value": "test_value"}).encode()
+            )
         )
 
         # Test get_applied_entry_result

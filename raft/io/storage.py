@@ -17,6 +17,7 @@ from raft.models.snapshot import Snapshot, SnapshotMetadata
 
 logger = logging.getLogger("raft.io.storage")
 
+
 def get_migration_files():
     """Get migration SQL files from the migrations directory."""
     # Always use the migrations directory relative to the project root
@@ -122,7 +123,10 @@ class BaseStorage:
         This is called after creating a snapshot to free up space.
 
         Args:
-            up_to_index: Remove log entries up to and including this index
+            up_to_index: 0-based index. Entries at positions 0..up_to_index
+                         (inclusive) are removed. Callers must pass a 0-based
+                         index matching the Log class convention (last_applied,
+                         last_included_index) — NOT a 1-based Raft log index.
 
         Returns:
             Number of log entries removed
@@ -213,11 +217,10 @@ class InMemoryStorage(BaseStorage):
         return deleted_count
 
     def compact_log(self, up_to_index: int) -> int:
-        """Remove log entries up to the specified index (inclusive)"""
+        """Remove log entries 0..up_to_index (inclusive). up_to_index is 0-based."""
         if up_to_index < 0 or up_to_index >= len(self.log):
             return 0
 
-        # Remove entries from index 0 to up_to_index (inclusive)
         entries_to_remove = up_to_index + 1
         self.log = self.log[entries_to_remove:]
 
@@ -407,7 +410,7 @@ class FileStorage(BaseStorage):
         return deleted_count
 
     def compact_log(self, up_to_index: int) -> int:
-        """Remove log entries up to the specified index (inclusive).
+        """Remove log entries 0..up_to_index (inclusive). up_to_index is 0-based.
 
         Reads all entries from the hierarchical file structure, keeps only
         entries after up_to_index, rewrites the files, and updates the
@@ -460,7 +463,9 @@ class FileStorage(BaseStorage):
             # Reset counter if all entries were compacted
             self.stored_item_count = 0
 
-        logger.info(f"Compacted FileStorage log: removed {removed_count} entries, {len(entries_to_keep)} remaining")
+        logger.info(
+            f"Compacted FileStorage log: removed {removed_count} entries, {len(entries_to_keep)} remaining"
+        )
         return removed_count
 
 
@@ -546,12 +551,15 @@ class SqliteStorage(BaseStorage):
 
     def save_log_entry(self, entry: bytes):
         """Save a log entry with automatic indexing and deduplication."""
+        try:
+            term = json.loads(entry).get("term", 1)
+        except (json.JSONDecodeError, AttributeError):
+            logger.warning("save_log_entry: could not parse term from entry, defaulting to 1")
+            term = 1
         with self._transaction() as conn:
-            # Parse entry to extract term and index information if needed
-            # For now, we'll use auto-incrementing index
             conn.execute(
                 "INSERT INTO log_entries (entry_data, term) VALUES (?, ?)",
-                (entry, 1),  # Default term - should be parsed from entry
+                (entry, term),
             )
 
     def load_log(self):
@@ -714,7 +722,9 @@ class SqliteStorage(BaseStorage):
         return deleted_count
 
     def compact_log(self, up_to_index: int) -> int:
-        """Remove log entries up to the specified index with transaction safety."""
+        """Delete all rows with log_index <= up_to_index. Note: SQLite log_index is 1-based
+        (auto-increment), so callers passing 0-based indices will see an off-by-one offset.
+        This is a pre-existing divergence from InMemoryStorage and FileStorage conventions."""
         with self._transaction() as conn:
             cursor = conn.execute("DELETE FROM log_entries WHERE log_index <= ?", (up_to_index,))
             deleted_count = cursor.rowcount

@@ -4,8 +4,8 @@ import json
 class LogEntry:
     __slots__ = ["command", "term"]
 
-    def __init__(self, term: int, data: bytes):
-        self.command = data
+    def __init__(self, term: int, data: bytes | str):
+        self.command = data.encode("utf-8") if isinstance(data, str) else data
         self.term = term
 
     def __eq__(self, other):
@@ -19,7 +19,7 @@ class LogEntry:
 
     @classmethod
     def from_json(cls, item):
-        return cls(item.get("term"), item.get("command", "").encode("utf-8"))
+        return cls(item.get("term"), item.get("command", ""))
 
     def to_json(self) -> bytes:
         return json.dumps(self.to_dict()).encode("utf-8")

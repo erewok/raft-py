@@ -321,16 +321,18 @@ class RequestVoteResponse(RpcBase, Generic[RPC]):
 
 
 class InstallSnapshotRpc(RpcBase, Generic[RPC]):
-    """RPC for leader to send snapshot chunks to followers"""
+    """RPC for leader to send a complete snapshot to a lagging follower.
+
+    Single-message transfer only — the entire snapshot is sent in one RPC.
+    Chunked transfer is not implemented.
+    """
 
     __slots__ = [
         "term",
         "leader_id",
         "last_included_index",
         "last_included_term",
-        "offset",
         "data",
-        "done",
         "type",
         "dest",
         "source",
@@ -342,9 +344,7 @@ class InstallSnapshotRpc(RpcBase, Generic[RPC]):
         leader_id: int,
         last_included_index: int,
         last_included_term: int,
-        offset: int,
         data: bytes,
-        done: bool,
         dest: transport.Address | None = None,
         source: transport.Address | None = None,
     ):
@@ -352,9 +352,7 @@ class InstallSnapshotRpc(RpcBase, Generic[RPC]):
         self.leader_id = leader_id
         self.last_included_index = last_included_index
         self.last_included_term = last_included_term
-        self.offset = offset  # Byte offset for this chunk
-        self.data = data  # Chunk of snapshot data
-        self.done = done  # True if this is the final chunk
+        self.data = data
         self.dest = dest
         self.source = source
         self.type = MsgType.InstallSnapshotRequest
@@ -367,9 +365,7 @@ class InstallSnapshotRpc(RpcBase, Generic[RPC]):
             "leader_id": self.leader_id,
             "last_included_index": self.last_included_index,
             "last_included_term": self.last_included_term,
-            "offset": self.offset,
             "data": base64.b64encode(self.data).decode("utf-8"),
-            "done": self.done,
             "type": int(self.type),
             "dest": self.dest,
             "source": self.source,
@@ -385,9 +381,7 @@ class InstallSnapshotRpc(RpcBase, Generic[RPC]):
                 "leader_id": data.get("leader_id", -1),
                 "last_included_index": data.get("last_included_index", -1),
                 "last_included_term": data.get("last_included_term", -1),
-                "offset": data.get("offset", 0),
                 "data": base64.b64decode(data.get("data", "")),
-                "done": data.get("done", False),
                 "dest": tuple(data.get("dest")) if data.get("dest") else None,
                 "source": tuple(data.get("source")) if data.get("source") else None,
             }

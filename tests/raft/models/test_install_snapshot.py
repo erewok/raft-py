@@ -52,7 +52,6 @@ class TestInstallSnapshotIntegration:
         assert install_rpc.term == leader.current_term
         assert install_rpc.leader_id == leader.node_id
         assert install_rpc.last_included_index == 3
-        assert install_rpc.done is True
 
         # Verify snapshot data is included
         import json
@@ -85,9 +84,7 @@ class TestInstallSnapshotIntegration:
             leader_id=1,
             last_included_index=2,
             last_included_term=1,
-            offset=0,
             data=json.dumps(snapshot_data).encode("utf-8"),
-            done=True,
             source=("localhost", 5001),
             dest=("localhost", 5002),
         )
@@ -130,9 +127,7 @@ class TestInstallSnapshotIntegration:
             leader_id=1,
             last_included_index=2,
             last_included_term=2,
-            offset=0,
             data=b'{"test": "data"}',
-            done=True,
             source=("localhost", 5001),
             dest=("localhost", 5002),
         )
@@ -239,9 +234,7 @@ class TestInstallSnapshotIntegration:
             leader_id=1,
             last_included_index=10,
             last_included_term=3,
-            offset=0,
             data=b'{"test": "snapshot"}',
-            done=True,
             dest=("localhost", 8000),
             source=("localhost", 8001),
         )
@@ -261,4 +254,3 @@ class TestInstallSnapshotIntegration:
         assert parsed_rpc.last_included_index == 10
         assert parsed_rpc.last_included_term == 3
         assert parsed_rpc.data == b'{"test": "snapshot"}'
-        assert parsed_rpc.done is True
