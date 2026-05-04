@@ -6,6 +6,7 @@ all BaseStorage interface methods with proper async/await patterns,
 ACID transactions, and trio compatibility.
 """
 
+import json
 import os
 import tempfile
 
@@ -75,7 +76,7 @@ class TestAsyncSqliteStorage:
         def _check_schema():
             conn = storage._get_connection()
             cursor = conn.execute("""
-                SELECT name FROM sqlite_master 
+                SELECT name FROM sqlite_master
                 WHERE type='table' AND name IN ('metadata', 'log_entries', 'snapshots')
             """)
             tables = [row[0] for row in cursor.fetchall()]
@@ -98,9 +99,10 @@ class TestAsyncSqliteStorage:
         # Verify metadata was saved by checking the database directly
         def _check_metadata():
             conn = storage._get_connection()
-            cursor = conn.execute("""
-                SELECT value FROM metadata WHERE key = 'raft_metadata'
-            """)
+            cursor = conn.execute(
+                "SELECT value FROM metadata WHERE key = ?",
+                (f"node_{storage.node_id}",),
+            )
             row = cursor.fetchone()
             return row
 
@@ -112,16 +114,10 @@ class TestAsyncSqliteStorage:
         """Test storing log entries"""
         storage = AsyncSqliteStorage(1, self.config)
 
-        # Create mock log entries
-        class MockLogEntry:
-            def __init__(self, term, data):
-                self.term = term
-                self.data = data
-
         entries = [
-            MockLogEntry(1, b"entry 1 data"),
-            MockLogEntry(1, b"entry 2 data"),
-            MockLogEntry(2, b"entry 3 data"),
+            json.dumps({"term": 1, "data": "entry 1 data"}).encode(),
+            json.dumps({"term": 1, "data": "entry 2 data"}).encode(),
+            json.dumps({"term": 2, "data": "entry 3 data"}).encode(),
         ]
 
         # Save entries
@@ -132,16 +128,19 @@ class TestAsyncSqliteStorage:
         def _check_entries():
             conn = storage._get_connection()
             cursor = conn.execute("""
-                SELECT term, data FROM log_entries ORDER BY id
+                SELECT term, entry_data FROM log_entries ORDER BY log_index
             """)
-            return [(row["term"], row["data"]) for row in cursor.fetchall()]
+            return [(row["term"], row["entry_data"]) for row in cursor.fetchall()]
 
         saved_entries = await trio.to_thread.run_sync(_check_entries)
 
         assert len(saved_entries) == 3
-        assert saved_entries[0] == (1, b"entry 1 data")
-        assert saved_entries[1] == (1, b"entry 2 data")
-        assert saved_entries[2] == (2, b"entry 3 data")
+        assert saved_entries[0][0] == 1
+        assert saved_entries[1][0] == 1
+        assert saved_entries[2][0] == 2
+        assert saved_entries[0][1] == entries[0]
+        assert saved_entries[1][1] == entries[1]
+        assert saved_entries[2][1] == entries[2]
 
     async def test_snapshot_save_and_load_functionality(self):
         """Test saving and loading snapshots"""
@@ -161,7 +160,7 @@ class TestAsyncSqliteStorage:
 
         # Save snapshot
         snapshot_id = await storage.save_snapshot(snapshot)
-        assert snapshot_id.startswith("async_sqlite_snapshot_")
+        assert snapshot_id.startswith("sqlite_snapshot_")
 
         # Load snapshot
         loaded_snapshot = await storage.load_snapshot(snapshot_id)
@@ -283,7 +282,7 @@ class TestAsyncSqliteStorage:
         remaining = await storage.list_snapshots()
         assert len(remaining) == 3
 
-        # Verify the correct ones remain (newest 3)
+        # Should be ordered by creation time, newest first
         remaining_indices = [s.last_included_index for s in remaining]
         assert 104 in remaining_indices  # Newest
         assert 103 in remaining_indices
@@ -295,15 +294,9 @@ class TestAsyncSqliteStorage:
         """Test log compaction functionality"""
         storage = AsyncSqliteStorage(1, self.config)
 
-        # Create mock log entries
-        class MockLogEntry:
-            def __init__(self, term, data):
-                self.term = term
-                self.data = data
-
         # Save multiple entries
         for i in range(10):
-            entry = MockLogEntry(1, f"entry {i} data".encode())
+            entry = json.dumps({"term": 1, "data": f"entry {i}"}).encode()
             await storage.save_log_entry(entry)
 
         # Compact log up to index 5
@@ -311,10 +304,14 @@ class TestAsyncSqliteStorage:
         assert deleted_count == 5
 
         # Verify remaining entries
-        async with await storage._get_connection() as conn:
-            cursor = await conn.execute("SELECT COUNT(*) as count FROM log_entries")
-            row = await cursor.fetchone()
-            assert row["count"] == 5  # Should have 5 remaining
+        def _check_count():
+            conn = storage._get_connection()
+            cursor = conn.execute("SELECT COUNT(*) as count FROM log_entries")
+            row = cursor.fetchone()
+            return row["count"]
+
+        count = await trio.to_thread.run_sync(_check_count)
+        assert count == 5  # Should have 5 remaining (indices 6-10)
 
     async def test_database_stats(self):
         """Test database statistics functionality"""
@@ -333,12 +330,8 @@ class TestAsyncSqliteStorage:
         # Add some data
         await storage.save_metadata(b"test")
 
-        class MockLogEntry:
-            def __init__(self, term, data):
-                self.term = term
-                self.data = data
-
-        await storage.save_log_entry(MockLogEntry(1, b"test data"))
+        entry = json.dumps({"term": 1, "data": "test data"}).encode()
+        await storage.save_log_entry(entry)
 
         state_machine = KeyValueStateMachine()
         snapshot = Snapshot.create(100, 5, state_machine.create_snapshot(), None)
@@ -355,15 +348,10 @@ class TestAsyncSqliteStorage:
         """Test concurrent access to async storage"""
         storage = AsyncSqliteStorage(1, self.config)
 
-        class MockLogEntry:
-            def __init__(self, term, data):
-                self.term = term
-                self.data = data
-
         async def save_entries(start_idx, count):
             """Save multiple entries concurrently"""
             for i in range(count):
-                entry = MockLogEntry(1, f"concurrent entry {start_idx + i}".encode())
+                entry = json.dumps({"term": 1, "data": f"concurrent entry {start_idx + i}"}).encode()
                 await storage.save_log_entry(entry)
 
         # Run concurrent operations

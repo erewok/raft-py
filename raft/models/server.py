@@ -19,6 +19,7 @@ to another as follows:
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from collections import namedtuple
@@ -138,7 +139,12 @@ class BaseServer(Generic[S]):
     def _restore_from_snapshot_if_exists(self):
         """Restore state from latest snapshot during startup"""
         try:
-            metadata = self.storage.get_latest_snapshot_metadata()
+            metadata_result = self.storage.get_latest_snapshot_metadata()
+            if inspect.iscoroutine(metadata_result):
+                # Async storage can't be awaited in a sync __init__; skip restoration.
+                metadata_result.close()
+                return
+            metadata = metadata_result
             if metadata:
                 snapshot = self.storage.load_snapshot(metadata.snapshot_id)
 
@@ -475,7 +481,7 @@ class Follower(BaseServer, Generic[S]):
             return new_instance, responses_events
         if event.type == EventType.LeaderAppendLogEntryRpc:
             responses_events = self.handle_append_entries_message(event)
-        elif event.type == EventType.InstallSnapshotRequest:
+        elif event.type == EventType.InstallSnapshotRequestRpc:
             responses_events = self.handle_install_snapshot_message(event)
         elif event.type == EventType.CandidateRequestVoteRpc:
             responses_events = self.handle_request_vote_rpc(event)

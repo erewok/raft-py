@@ -47,6 +47,18 @@ class TestConfigurableComponents:
             conf.set("Cluster", "NodeCount", "3")
             conf.set("Cluster", "StorageClass", "FileStorage")
 
+            conf.add_section("Nodes")
+            conf.set("Nodes", "Node1", "A")
+            conf.set("Nodes", "Node2", "B")
+            conf.set("Nodes", "Node3", "C")
+            for i, label in enumerate(["A", "B", "C"], 1):
+                section = f"Node.{label}"
+                conf.add_section(section)
+                conf.set(section, "Label", label)
+                conf.set(section, "Id", str(i))
+                conf.set(section, "Port", str(3110 + i))
+                conf.set(section, "Host", "127.0.0.1")
+
             config = Config(conf)
 
             # Create storage
@@ -56,8 +68,8 @@ class TestConfigurableComponents:
             assert type(storage).__name__ == "FileStorage"
             assert hasattr(storage, "save_snapshot")
 
-            # Verify directory was created
-            node_dir = os.path.join(temp_dir, "node_1")
+            # Verify directory was created (FileStorage uses node label as dir name)
+            node_dir = os.path.join(temp_dir, "A")
             assert os.path.exists(node_dir)
 
     def test_sqlite_storage_creation(self):

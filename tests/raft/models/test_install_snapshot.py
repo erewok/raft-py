@@ -1,5 +1,8 @@
 """Integration tests for InstallSnapshot RPC functionality."""
 
+import configparser
+import os
+
 from raft.io.storage import InMemoryStorage
 from raft.models.config import Config
 from raft.models.log import LogEntry
@@ -9,29 +12,45 @@ from raft.models.snapshot import KeyValueStateMachine
 
 from raft.models import Event, EventType
 
+test_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+root_dir = os.path.dirname(test_dir)
+
+
+def _make_config(node_count=2, snapshot_threshold=5):
+    _conf = configparser.ConfigParser()
+    _conf.read(os.path.join(root_dir, "raft.ini"))
+    _conf.set("Cluster", "NodeCount", str(node_count))
+    _conf.set("Cluster", "SnapshotThreshold", str(snapshot_threshold))
+    for n in range(node_count + 1, 6):
+        label = _conf["Nodes"].get(f"Node{n}", "")
+        if label and f"Node.{label}" in _conf:
+            del _conf[f"Node.{label}"]
+        if f"Node{n}" in _conf["Nodes"]:
+            del _conf["Nodes"][f"Node{n}"]
+    return _conf
+
 
 class TestInstallSnapshotIntegration:
     """Test InstallSnapshot RPC between Leader and Follower."""
 
     def test_leader_sends_snapshot_to_lagging_follower(self):
         """Test that leader sends snapshot when follower's next_index is too low."""
-        # Setup leader with a state machine and some applied entries
-        leader_storage = InMemoryStorage()
-        leader_state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2], log_compaction_threshold=3)
+        conf = _make_config(node_count=2, snapshot_threshold=3)
+        config = Config(conf)
 
+        leader_storage = InMemoryStorage(1, config)
+        leader_state_machine = KeyValueStateMachine()
         leader = Leader(node_id=1, config=config, storage=leader_storage, state_machine=leader_state_machine)
 
         # Add entries and create a snapshot
         entries = [
-            LogEntry(term=1, command={"op": "set", "key": "a", "value": "1"}),
-            LogEntry(term=1, command={"op": "set", "key": "b", "value": "2"}),
-            LogEntry(term=1, command={"op": "set", "key": "c", "value": "3"}),
-            LogEntry(term=1, command={"op": "set", "key": "d", "value": "4"}),
+            LogEntry(term=1, data=b'{"op": "set", "key": "a", "value": "1"}'),
+            LogEntry(term=1, data=b'{"op": "set", "key": "b", "value": "2"}'),
+            LogEntry(term=1, data=b'{"op": "set", "key": "c", "value": "3"}'),
+            LogEntry(term=1, data=b'{"op": "set", "key": "d", "value": "4"}'),
         ]
 
-        for entry in entries:
-            leader.log.append_entries([entry])
+        leader.log.append_entries(entries=entries)
 
         leader.commit_index = len(entries) - 1
         leader._apply_committed_entries()
@@ -64,11 +83,11 @@ class TestInstallSnapshotIntegration:
 
     def test_follower_installs_snapshot_correctly(self):
         """Test that follower correctly processes InstallSnapshot RPC."""
-        # Setup follower
-        follower_storage = InMemoryStorage()
-        follower_state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2])
+        conf = _make_config(node_count=2)
+        config = Config(conf)
 
+        follower_storage = InMemoryStorage(2, config)
+        follower_state_machine = KeyValueStateMachine()
         follower = Follower(
             node_id=2, config=config, storage=follower_storage, state_machine=follower_state_machine
         )
@@ -111,11 +130,11 @@ class TestInstallSnapshotIntegration:
 
     def test_follower_rejects_stale_snapshot(self):
         """Test that follower rejects snapshot with older term."""
-        # Setup follower with higher term
-        follower_storage = InMemoryStorage()
-        follower_state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2])
+        conf = _make_config(node_count=2)
+        config = Config(conf)
 
+        follower_storage = InMemoryStorage(2, config)
+        follower_state_machine = KeyValueStateMachine()
         follower = Follower(
             node_id=2, config=config, storage=follower_storage, state_machine=follower_state_machine
         )
@@ -145,17 +164,16 @@ class TestInstallSnapshotIntegration:
 
     def test_leader_updates_next_index_after_successful_snapshot(self):
         """Test that leader updates next_index after successful InstallSnapshot response."""
-        # Setup leader
-        leader_storage = InMemoryStorage()
-        leader_state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2])
+        conf = _make_config(node_count=2, snapshot_threshold=1)
+        config = Config(conf)
 
+        leader_storage = InMemoryStorage(1, config)
+        leader_state_machine = KeyValueStateMachine()
         leader = Leader(node_id=1, config=config, storage=leader_storage, state_machine=leader_state_machine)
 
         # Create and save a snapshot
-        entries = [LogEntry(term=1, command={"op": "set", "key": "test", "value": "data"})]
-        for entry in entries:
-            leader.log.append_entries([entry])
+        entries = [LogEntry(term=1, data=b'{"op": "set", "key": "test", "value": "data"}')]
+        leader.log.append_entries(entries=entries)
         leader.commit_index = 0
         leader._apply_committed_entries()
         leader.create_snapshot()
@@ -163,6 +181,9 @@ class TestInstallSnapshotIntegration:
         # Set initial next_index for follower
         leader.next_index[2] = 0
         leader.match_index[2] = 0
+
+        # Simulate that a snapshot was sent to node 2 (normally set by construct_install_snapshot_rpc)
+        leader.snapshot_sent_index[2] = leader.last_snapshot_index
 
         # Create successful InstallSnapshot response
         class MockInstallSnapshotResponse:
@@ -187,20 +208,19 @@ class TestInstallSnapshotIntegration:
 
     def test_construct_append_entry_rpcs_sends_snapshot_when_needed(self):
         """Test that construct_append_entry_rpcs chooses snapshot over log entries when appropriate."""
-        # Setup leader with snapshot
-        leader_storage = InMemoryStorage()
-        leader_state_machine = KeyValueStateMachine()
-        config = Config(nodes=[1, 2])
+        conf = _make_config(node_count=2, snapshot_threshold=2)
+        config = Config(conf)
 
+        leader_storage = InMemoryStorage(1, config)
+        leader_state_machine = KeyValueStateMachine()
         leader = Leader(node_id=1, config=config, storage=leader_storage, state_machine=leader_state_machine)
 
         # Create entries, apply them, and make snapshot
         entries = [
-            LogEntry(term=1, command={"op": "set", "key": "a", "value": "1"}),
-            LogEntry(term=1, command={"op": "set", "key": "b", "value": "2"}),
+            LogEntry(term=1, data=b'{"op": "set", "key": "a", "value": "1"}'),
+            LogEntry(term=1, data=b'{"op": "set", "key": "b", "value": "2"}'),
         ]
-        for entry in entries:
-            leader.log.append_entries([entry])
+        leader.log.append_entries(entries=entries)
 
         leader.commit_index = len(entries) - 1
         leader._apply_committed_entries()

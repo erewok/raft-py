@@ -298,10 +298,10 @@ class TestSqliteStorage:
 
         # Initial stats
         stats = storage.get_storage_stats()
-        assert stats["log_entries"] == 0
-        assert stats["snapshots"] == 0
-        assert stats["db_size_bytes"] > 0  # Database file exists
-        assert stats["db_path"] == storage.db_path
+        assert stats["log_entries_count"] == 0
+        assert stats["snapshots_count"] == 0
+        assert stats["database_size_bytes"] > 0  # Database file exists
+        assert stats["database_path"] == storage.db_path
 
         # Add some data
         storage.save_log_entry(b"test_entry")
@@ -317,10 +317,10 @@ class TestSqliteStorage:
 
         # Updated stats
         updated_stats = storage.get_storage_stats()
-        assert updated_stats["log_entries"] == 1
-        assert updated_stats["snapshots"] == 1
+        assert updated_stats["log_entries_count"] == 1
+        assert updated_stats["snapshots_count"] == 1
         assert (
-            updated_stats["db_size_bytes"] >= stats["db_size_bytes"]
+            updated_stats["database_size_bytes"] >= stats["database_size_bytes"]
         )  # May be same due to SQLite page allocation
 
         storage.close()

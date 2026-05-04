@@ -18,7 +18,7 @@ class Config:
         self.node_count = int(conf["Cluster"]["NodeCount"])
 
         # Storage configuration
-        self.storage_class = conf["Cluster"]["StorageClass"]
+        self.storage_class = conf["Cluster"].get("StorageClass", "InMemoryStorage")
 
         # Snapshot configuration
         self.snapshot_threshold = int(conf["Cluster"].get("SnapshotThreshold", "1000"))

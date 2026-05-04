@@ -244,9 +244,17 @@ class FileStorage(BaseStorage):
         self.set_stored_item_count()
 
     def set_stored_item_count(self):
-        maxdir = max(sorted(os.listdir(self.data_filepath)))
+        dirs = sorted(os.listdir(self.data_filepath))
+        if not dirs:
+            self.stored_item_count = 0
+            return
+        maxdir = max(dirs)
         maxdir_abspath = os.path.join(self.data_filepath, maxdir)
-        max_file = max(sorted(os.listdir(maxdir_abspath)))
+        files = sorted(os.listdir(maxdir_abspath))
+        if not files:
+            self.stored_item_count = 0
+            return
+        max_file = max(files)
         max_file_abspath = os.path.join(maxdir_abspath, max_file)
         with open(max_file_abspath, "rb") as fl:
             line_count = sum(1 for _ in fl)
@@ -479,6 +487,10 @@ class SqliteStorage(BaseStorage):
         self.node_id = node_id
         self.data_directory = config.data_directory
         self.db_path = os.path.join(self.data_directory, f"node_{node_id}.db")
+        try:
+            self.node_label = config.node_mapping[node_id]["label"]
+        except (KeyError, Exception):
+            self.node_label = f"node_{node_id}"
 
         # Ensure data directory exists
         os.makedirs(self.data_directory, exist_ok=True)
@@ -741,25 +753,30 @@ class SqliteStorage(BaseStorage):
         """Get storage statistics for monitoring and diagnostics."""
         conn = self._get_connection()
 
-        # Log entry count
         cursor = conn.execute("SELECT COUNT(*) as count FROM log_entries")
         log_count = cursor.fetchone()["count"]
 
-        # Snapshot count
         cursor = conn.execute("SELECT COUNT(*) as count FROM snapshots")
         snapshot_count = cursor.fetchone()["count"]
 
-        # Database size
+        cursor = conn.execute(
+            "SELECT COUNT(*) as count FROM metadata WHERE key = ?", (f"node_{self.node_id}",)
+        )
+        metadata_count = cursor.fetchone()["count"]
+
         cursor = conn.execute(
             "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()"
         )
         db_size = cursor.fetchone()["size"]
 
         return {
-            "log_entries": log_count,
-            "snapshots": snapshot_count,
-            "db_size_bytes": db_size,
-            "db_path": self.db_path,
+            "log_entries_count": log_count,
+            "snapshots_count": snapshot_count,
+            "metadata_count": metadata_count,
+            "node_id": self.node_id,
+            "node_label": self.node_label,
+            "database_size_bytes": db_size,
+            "database_path": self.db_path,
         }
 
     def vacuum(self):
