@@ -2,6 +2,31 @@ import enum
 from typing import Any
 
 from .rpc import MsgType, parse_msg
+from .snapshot import (
+    KeyValueStateMachine,
+    NoOpStateMachine,
+    Snapshot,
+    SnapshotMetadata,
+    StateMachine,
+)
+
+__all__ = [
+    "EventType",
+    "Event",
+    "MsgType",
+    "parse_msg",
+    "parse_msg_to_event",
+    "Snapshot",
+    "SnapshotMetadata",
+    "StateMachine",
+    "KeyValueStateMachine",
+    "NoOpStateMachine",
+    "EVENT_SELF_WON_ELECTION",
+    "EVENT_CONVERSION_TO_LEADER",
+    "EVENT_CONVERSION_TO_FOLLOWER",
+    "EVENT_HEARTBEAT",
+    "EVENT_START_HEARTBEAT",
+]
 
 # Next == /\ \/ \E i \in Server : Restart(i)
 #            \/ \E i \in Server : Timeout(i)
@@ -27,6 +52,8 @@ class EventType(enum.IntEnum):
     HeartbeatTime = 10
     ClientAppendRequest = 11
     ResetElectionTimeout = 12
+    InstallSnapshotRequestRpc = 20
+    InstallSnapshotConfirm = 21
 
     # We need to manage timers when various things happen
     ConversionToCandidate = 14
@@ -83,6 +110,10 @@ def parse_msg_to_event(msg: bytes) -> Event | None:
         return Event(EventType.CandidateRequestVoteRpc, result)
     elif result.type == MsgType.RequestVoteResponse:
         return Event(EventType.ReceiveServerCandidateVote, result)
+    elif result.type == MsgType.InstallSnapshotRequest:
+        return Event(EventType.InstallSnapshotRequestRpc, result)
+    elif result.type == MsgType.InstallSnapshotResponse:
+        return Event(EventType.InstallSnapshotConfirm, result)
     elif result.type == MsgType.ClientRequest:
         return Event(EventType.ClientAppendRequest, result)
     elif result.type == MsgType.DEBUG_MESSAGE:

@@ -8,9 +8,7 @@ if __name__ == "__main__":  # pragma: nocover
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", help="Config file path", required=True)
-    parser.add_argument(
-        "--node-id", "-n", help="Node Id (int)", type=int, required=True
-    )
+    parser.add_argument("--node-id", "-n", help="Node Id (int)", type=int, required=True)
     parser.add_argument("--runtime", "-r", help="Runtime class")
     args = parser.parse_args()
 

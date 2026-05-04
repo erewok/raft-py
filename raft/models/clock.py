@@ -40,9 +40,7 @@ class ThreadedClock:
 
     def start(self):
         if self.thread is None:
-            self.thread = threading.Thread(
-                target=self.generate_ticks, args=(self.event_queue,)
-            )
+            self.thread = threading.Thread(target=self.generate_ticks, args=(self.event_queue,))
         self.thread.start()
 
     def generate_ticks(self, event_q):

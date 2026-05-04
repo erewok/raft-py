@@ -46,9 +46,7 @@ class ThreadedEventController(BaseEventController):
         self.election_timer = None
         self.heartbeat = None
         # need a singleton to trigger closing states
-        self.termination_sentinel = (
-            termination_sentinel if termination_sentinel is not None else object()
-        )
+        self.termination_sentinel = termination_sentinel if termination_sentinel is not None else object()
 
         # thread communication queues
         self.command_event: threading.Event = threading.Event()
@@ -89,10 +87,8 @@ class ThreadedEventController(BaseEventController):
             event = self.client_msg_into_event(item)
             event_type = event.type if event is not None else "none"
             logger.info(
-
-                    f"{self._log_name} turned item {str(item)} "
-                    f"into {event_type} even with qsize now {self.events.qsize()}"
-
+                f"{self._log_name} turned item {str(item)} "
+                f"into {event_type} even with qsize now {self.events.qsize()}"
             )
         logger.info(f"{self._log_name} Stop: process inbound messages")
 
@@ -121,14 +117,10 @@ class ThreadedEventController(BaseEventController):
         )
         self.listen_server.start()
         # Launch inbound message processor
-        self.inbound_message_processor = threading.Thread(
-            target=self.process_inbound_msgs, daemon=True
-        )
+        self.inbound_message_processor = threading.Thread(target=self.process_inbound_msgs, daemon=True)
         self.inbound_message_processor.start()
         # Launch outbound message processor
-        self.outbound_message_processor = threading.Thread(
-            target=self.process_outbound_msgs, daemon=True
-        )
+        self.outbound_message_processor = threading.Thread(target=self.process_outbound_msgs, daemon=True)
         self.outbound_message_processor.start()
 
     def stop(self):
@@ -196,9 +188,7 @@ class ThreadedRuntime(BaseRuntime):
         if self.debug:
             logger.info(f"{self.log_name} DEBUGGING Event")
             logger.info(f"{self.log_name} is currently {self.instance.__class__.log_name}")
-            for key in filter(
-                lambda el: el not in no_dump_keys, self.instance.transfer_attrs
-            ):
+            for key in filter(lambda el: el not in no_dump_keys, self.instance.transfer_attrs):
                 value = getattr(self.instance, key)
                 logger.info(f"\t`{key}`: \t {str(value)}")
             logger.info(f"\t`Log`: \t {repr(self.instance.log)}")
@@ -231,9 +221,7 @@ class ThreadedRuntime(BaseRuntime):
             self.handle_start_heartbeat(event)
 
     def drop_event(self, event):
-        if event.type == EventType.HeartbeatTime and isinstance(
-            self.instance, Follower
-        ):
+        if event.type == EventType.HeartbeatTime and isinstance(self.instance, Follower):
             return True
         return False
 
@@ -247,9 +235,7 @@ class ThreadedRuntime(BaseRuntime):
         if event.type in RUNTIME_EVENTS:
             self.runtime_handle_event(event)
 
-        logger.info(
-            f"{self.log_name} Handling event: EventType={event.type} MsgType={msg_type}"
-        )
+        logger.info(f"{self.log_name} Handling event: EventType={event.type} MsgType={msg_type}")
         self.instance, (responses, more_events) = self.instance.handle_event(event)
         if responses:
             logger.info(f"{self.log_name} Event OutboundMsg={len(responses)}")
@@ -281,10 +267,7 @@ class ThreadedRuntime(BaseRuntime):
 
             self.handle_event(event)
             logger.debug(
-
-                    f"{self.log_name} Handled event with qsize now "
-                    f"{self.event_controller.events.qsize()}"
-
+                f"{self.log_name} Handled event with qsize now {self.event_controller.events.qsize()}"
             )
         logger.warning(f"{self.log_name} Stop: Shutting down primary event handler")
 

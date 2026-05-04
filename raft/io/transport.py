@@ -91,9 +91,7 @@ def listen_server(address, msg_queue, listen_server_event: Event | None = None):
 # # # # # # # # # # # # # # # # #
 # Socket Client functions
 # # # # # # # # # # # # # # # # #
-def client_send_msg(
-    address: Address, msg: bytes, timeout: int = DEFAULT_REQUEST_TIMEOUT
-) -> bytes | None:
+def client_send_msg(address: Address, msg: bytes, timeout: int = DEFAULT_REQUEST_TIMEOUT) -> bytes | None:
     with socket(AF_INET, SOCK_STREAM) as sock:
         old_timeout = sock.gettimeout()
         sock.settimeout(timeout)
@@ -109,23 +107,18 @@ def client_send_msg(
         return None
 
 
-def broadcast_requests(
-    address_msgs: list[Request], timeout: int = 1
-) -> dict[Address, MsgResponse]:
+def broadcast_requests(address_msgs: list[Request], timeout: int = 1) -> dict[Address, MsgResponse]:
     results_by_addr: dict[Address, MsgResponse] = {}  # addr -> bytes result
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         request_rpcs = {
-            executor.submit(client_send_msg, addr, msg, timeout): addr
-            for addr, msg in address_msgs
+            executor.submit(client_send_msg, addr, msg, timeout): addr for addr, msg in address_msgs
         }
         for future in concurrent.futures.as_completed(request_rpcs):
             addr = request_rpcs[future]
             try:
                 results_by_addr[addr] = future.result()
             except Exception:
-                logger.error(
-                    f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}"
-                )
+                logger.error(f"{CLIENT_LOG_NAME} Failed reaching socket address: {addr[0]}:{addr[1]}")
                 logger.error(traceback.format_exc())
                 results_by_addr[addr] = None
     return results_by_addr
