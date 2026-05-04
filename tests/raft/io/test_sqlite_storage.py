@@ -12,6 +12,8 @@ import time
 from threading import Thread
 
 import pytest
+from sqlite3 import IntegrityError
+
 from raft.io.storage import SqliteStorage
 from raft.models.config import Config
 from raft.models.snapshot import KeyValueStateMachine, Snapshot
@@ -72,7 +74,7 @@ class TestSqliteStorage:
         # Verify schema was created by checking tables exist
         conn = storage._get_connection()
         cursor = conn.execute("""
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='table' AND name IN ('metadata', 'log_entries', 'snapshots')
         """)
         tables = [row[0] for row in cursor.fetchall()]
@@ -394,14 +396,14 @@ class TestSqliteStorage:
 
         # Attempt to create an invalid snapshot that should fail
         # (We'll simulate this by trying to insert duplicate primary key)
-        with pytest.raises(Exception):  # Should raise some database error
+        with pytest.raises(IntegrityError):  # Should raise some database error
             with storage._transaction() as conn:
                 # This should succeed initially
                 conn.execute(
                     """
                     INSERT INTO snapshots (
                         snapshot_id, last_included_index, last_included_term,
-                        state_machine_data, configuration, timestamp, 
+                        state_machine_data, configuration, timestamp,
                         checksum, size_bytes
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -413,7 +415,7 @@ class TestSqliteStorage:
                     """
                     INSERT INTO snapshots (
                         snapshot_id, last_included_index, last_included_term,
-                        state_machine_data, configuration, timestamp, 
+                        state_machine_data, configuration, timestamp,
                         checksum, size_bytes
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,

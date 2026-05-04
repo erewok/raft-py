@@ -604,7 +604,7 @@ class SqliteStorage(BaseStorage):
                 """
                 INSERT INTO snapshots (
                     snapshot_id, last_included_index, last_included_term,
-                    state_machine_data, configuration, timestamp, 
+                    state_machine_data, configuration, timestamp,
                     checksum, size_bytes
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -653,8 +653,8 @@ class SqliteStorage(BaseStorage):
         cursor = conn.execute("""
             SELECT snapshot_id, last_included_index, last_included_term,
                    size_bytes, created_at
-            FROM snapshots 
-            ORDER BY created_at DESC 
+            FROM snapshots
+            ORDER BY created_at DESC
             LIMIT 1
         """)
         row = cursor.fetchone()
@@ -677,7 +677,7 @@ class SqliteStorage(BaseStorage):
         cursor = conn.execute("""
             SELECT snapshot_id, last_included_index, last_included_term,
                    size_bytes, created_at
-            FROM snapshots 
+            FROM snapshots
             ORDER BY created_at DESC
         """)
 
@@ -713,8 +713,8 @@ class SqliteStorage(BaseStorage):
             # Get snapshot IDs to delete (all except the newest keep_count)
             cursor = conn.execute(
                 """
-                SELECT snapshot_id FROM snapshots 
-                ORDER BY created_at DESC 
+                SELECT snapshot_id FROM snapshots
+                ORDER BY created_at DESC
                 LIMIT -1 OFFSET ?
             """,
                 (keep_count,),
