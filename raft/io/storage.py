@@ -734,11 +734,10 @@ class SqliteStorage(BaseStorage):
         return deleted_count
 
     def compact_log(self, up_to_index: int) -> int:
-        """Delete all rows with log_index <= up_to_index. Note: SQLite log_index is 1-based
-        (auto-increment), so callers passing 0-based indices will see an off-by-one offset.
-        This is a pre-existing divergence from InMemoryStorage and FileStorage conventions."""
+        """Delete all rows with log_index <= up_to_index + 1. SQLite log_index is 1-based
+        (auto-increment), so we convert the 0-based up_to_index to 1-based."""
         with self._transaction() as conn:
-            cursor = conn.execute("DELETE FROM log_entries WHERE log_index <= ?", (up_to_index,))
+            cursor = conn.execute("DELETE FROM log_entries WHERE log_index <= ?", (up_to_index + 1,))
             deleted_count = cursor.rowcount
 
         # Optimize database after cleanup (VACUUM must be outside transaction)

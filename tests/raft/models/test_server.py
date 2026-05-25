@@ -287,6 +287,9 @@ def test_handle_vote_response(candidate, follower, fig7_a_log, candidate_request
     _, events = result
     assert events
     assert events[0].type == EventType.SelfWinElection
+    assert len(candidate.log) > 0
+    assert candidate.log[-1].command == b'noop'
+    assert candidate.log[-1].term == candidate.current_term
 
 
 # Testing Leader events

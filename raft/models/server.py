@@ -54,6 +54,43 @@ def empty_response() -> ResponsesEvents:
     return ResponsesEvents([], [])
 
 
+class SyncStorageProxy:
+    """
+    Wraps an async storage backend to provide synchronous access.
+    This is a workaround for the current architecture where BaseServer is synchronous
+    but may be configured with an asynchronous storage backend.
+    """
+    def __init__(self, storage):
+        self._storage = storage
+
+    def __getattr__(self, name):
+        attr = getattr(self._storage, name)
+        if inspect.iscoroutinefunction(attr):
+            def wrapped(*args, **kwargs):
+                from raft.io.storage import SqliteStorage, FileStorage
+                
+                class_name = self._storage.__class__.__name__
+                if class_name == "AsyncSqliteStorage":
+                    sync_cls = SqliteStorage
+                elif class_name == "AsyncFileStorage":
+                    sync_cls = FileStorage
+                else:
+                    # Fallback for unknown async storages: execute and discard
+                    res = attr(*args, **kwargs)
+                    if inspect.iscoroutine(res):
+                        res.close()
+                    return res
+
+                sync_method = getattr(sync_cls, name)
+                # Call the synchronous implementation on the async storage instance
+                return sync_method(self._storage, *args, **kwargs)
+            return wrapped
+        return attr
+
+    def __repr__(self):
+        return f"SyncStorageProxy({repr(self._storage)})"
+
+
 class BaseServer(Generic[S]):
     def __init__(self, node_id: int, config: Config, storage, state_machine: StateMachine = None):
         # must be persisted to storage (from raft paper)
@@ -65,9 +102,10 @@ class BaseServer(Generic[S]):
         self.last_applied = -1
         # this is implementation specific
         self.applied: list[log.LogEntry] = []
-        self.storage = storage
+        self.storage = SyncStorageProxy(storage)
         self.config = config
         self.node_id = node_id
+
         self.all_node_ids = list(filter(lambda el: el != self.node_id, self.config.node_mapping.keys()))
         self.quorom: int = (len(self.all_node_ids) // 2) + 1
         this_node = self.config.node_mapping[self.node_id]
@@ -123,7 +161,7 @@ class BaseServer(Generic[S]):
         )
 
     def save_log_entry(self):
-        self.storage.save(self.log[-1])
+        self.storage.save_log_entry(self.log[-1])
 
     def convert(self, target_class) -> S:
         logger.warning(f"Converting from {self._log_name} to {target_class.log_name}")
@@ -311,6 +349,19 @@ class Candidate(BaseServer, Generic[S]):
             # We should immediately trigger a heartbeat here
             # to assert our leader's EventType.HeartbeatTime
             # We're also supposed to commit a NOOP into the log
+            # Raft §5.4.3 (Leader Completeness) and Figure 8:
+            # The leader must append a NO-OP entry to its log before
+            # committing any entries from previous terms.
+            noop_entry = log.LogEntry(self.current_term, b"noop")
+            prev_index = len(self.log) - 1
+            prev_term = self.log[-1].term if len(self.log) > 0 else -1
+            self.log.append_entries(
+                prev_index=prev_index,
+                prev_term=prev_term,
+                entries=[noop_entry],
+            )
+            self.save_log_entry()
+            self.save_meta()
             events = [
                 EVENT_SELF_WON_ELECTION,
                 EVENT_HEARTBEAT,

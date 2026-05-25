@@ -1,4 +1,5 @@
 import json
+import threading
 
 
 class LogEntry:
@@ -36,21 +37,27 @@ class Log:
 
     def __init__(self):
         self.log: list[LogEntry] = []
+        self._lock = threading.Lock()
 
     def __eq__(self, other):
-        return self.log == other.log
+        with self._lock:
+            return self.log == other.log
 
     def __len__(self):
-        return len(self.log)
+        with self._lock:
+            return len(self.log)
 
     def __repr__(self):
-        return ", ".join(map(repr, self.log))
+        with self._lock:
+            return ", ".join(map(repr, self.log))
 
     def __getitem__(self, index) -> LogEntry:
-        return self.log[index]
+        with self._lock:
+            return self.log[index]
 
     def flush_to_storage(self, storage):
-        pass
+        with self._lock:
+            pass
 
     def append_entries(
         self, prev_index: int = -1, prev_term: int = -1, entries: list[LogEntry] = None
@@ -66,26 +73,27 @@ class Log:
 
         This is almost entirely Dabeaz's implementation.
         """
-        if not entries:
-            return True
-        if len(self.log) <= prev_index:
-            # Invariant: no holes allowed
-            return False
-
-        if prev_index >= 0:
-            if self.log[prev_index].term != prev_term:
+        with self._lock:
+            if not entries:
+                return True
+            if len(self.log) <= prev_index:
+                # Invariant: no holes allowed
                 return False
 
-        next_index = prev_index + 1
-        insertion_point = slice(next_index, next_index + len(entries))
-        # "If an existing entry conflicts with a new one (same index, but different terms)"
-        # delete the existing entry and all that follow it
-        for n, (existing_entry, new_entry) in enumerate(
-            zip(self.log[insertion_point], entries, strict=False)
-        ):
-            if existing_entry.term != new_entry.term:
-                del self.log[next_index + n :]
-                break
+            if prev_index >= 0:
+                if self.log[prev_index].term != prev_term:
+                    return False
 
-        self.log[insertion_point] = entries
-        return True
+            next_index = prev_index + 1
+            insertion_point = slice(next_index, next_index + len(entries))
+            # "If an existing entry conflicts with a new one (same index, but different terms)"
+            # delete the existing entry and all that follow it
+            for n, (existing_entry, new_entry) in enumerate(
+                zip(self.log[insertion_point], entries, strict=False)
+            ):
+                if existing_entry.term != new_entry.term:
+                    del self.log[next_index + n :]
+                    break
+
+            self.log[insertion_point] = entries
+            return True
